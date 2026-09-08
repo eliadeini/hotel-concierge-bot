@@ -1,0 +1,19 @@
+# Secrets — never commit
+.env
+OpenAI API Key.txt
+
+# Local data (SQLite)
+data/
+
+# Real client data — kept local only, see app/knowledge/README.md
+app/knowledge/hotel_skills/h34-nahariya.md
+app/knowledge/files/nahariya/restaurants.md
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local Claude Code config — not a secret, just not meant for the public repo
+.claude/settings.local.json

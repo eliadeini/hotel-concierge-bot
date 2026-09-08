@@ -1,0 +1,26 @@
+# `app/messaging/` — WhatsApp provider abstraction
+
+## Why this exists
+The bot runs as a WhatsApp bot from phase 1 (the hotel owner's explicit request — see `hotel_concierge_bot_plan.md`), and different hotels may end up on different WhatsApp providers or even different Twilio accounts/numbers over time. So the webhook handlers never talk to Twilio or Meta's APIs directly — they only call `MessagingProvider.send_message(...)`, exactly like `app/engines/` does for AI providers. Rate limiting (per-phone, per-hotel, and global daily caps — to avoid an unexpectedly large WhatsApp bill) is built into this layer too, so every send is automatically rate-limited regardless of caller.
+
+## Layout
+- **`base.py`** — the `MessagingProvider` interface (`send_message(to, text) -> bool`), `MessagingError`, `RateLimiter` (the actual limit-checking/incrementing logic against `MessageRateLimitCounter`), and `RateLimitedMessagingProvider` — a decorator that wraps any concrete provider and enforces the `RateLimiter` before every send. Every provider returned by `factory.get_messaging_provider()` is wrapped in this, so callers never need to remember to check limits themselves.
+- **`twilio_provider.py`** — `TwilioMessagingProvider`. Sends via Twilio's WhatsApp API using `httpx.AsyncClient`. The default/primary provider.
+- **`meta_direct_provider.py`** — `MetaDirectMessagingProvider`. Sends via the WhatsApp Cloud API directly (Meta Graph API). Untested against a live account — treat as a stub until exercised for real.
+- **`mock_provider.py`** — `MockMessagingProvider`. Logs instead of sending; always returns `True`. Selected globally via `MESSAGING_PROVIDER=mock`, for local dev without a real Twilio/Meta account.
+- **`factory.py`** — `get_messaging_provider(hotel_id, db)`. Resolution order: `MESSAGING_PROVIDER=mock` overrides everything (dev only); otherwise each field (provider choice, credentials, per-hotel rate-limit override) is read from that hotel's `HotelMessagingSettings` row if set, else from the global defaults in `app/config.py`. Per-hotel Twilio/Meta secrets are stored encrypted (`encrypt_key`/`decrypt_key` from `app/security/crypto.py`, the same Fernet helper used for the AI engine's API key) and decrypted here.
+- **`webhook_base.py`** — the *inbound*-side counterpart to `base.py`: the `WhatsAppWebhookHandler` interface (`verify_get()` for providers with a handshake, `parse_inbound()` returning an `InboundMessage`) implemented separately per provider in `app/api/`, since Meta (JSON, app-wide `X-Hub-Signature-256`) and Twilio (form-encoded, per-hotel `X-Twilio-Signature`) have incompatible request shapes and signing schemes — there's no single generic parser to share.
+- **`inbound.py`** — provider-agnostic processing shared by both webhook handlers once they've resolved a request down to an `InboundMessage`: `process_inbound_message()` calls `gather_context()` to merge knowledge-base context across the hotel's `HotelRegionTag` entries, routes to the scripted flow (`_handle_flow_reply`) or the normal AI-engine chat path, and replies via `get_messaging_provider(...).send_message(...)`. `gather_context()` is public (not underscore-prefixed) because it has a second caller: `app/ui/routes.py`'s browser demo uses it directly so it shows exactly the same knowledge-base context a real WhatsApp message would get.
+
+## Adding a new provider
+1. Create `<provider>_provider.py` with a class implementing `MessagingProvider.send_message()`.
+2. Add the new value to `MessagingProviderType` in `app/models/hotel_messaging_settings.py`.
+3. Wire it into `factory.get_messaging_provider()`.
+4. If the provider also needs to *receive* messages, add a `<provider>_whatsapp_webhook.py` router in `app/api/` implementing `WhatsAppWebhookHandler`, and register it in `app/main.py`.
+
+## Inbound messages
+Receiving is not a `MessagingProvider` method — Twilio/Meta deliver inbound messages by POSTing to a webhook we expose. Each provider gets its own router: `app/api/meta_whatsapp_webhook.py` (the live-registered `/webhook/whatsapp` — already GET-verified in Meta's dashboard, so its path is deliberately unchanged) and `app/api/twilio_whatsapp_webhook.py` (`/webhook/whatsapp/twilio`, not yet live-configured). Both implement `WhatsAppWebhookHandler` (`webhook_base.py`) and hand off to the shared `process_inbound_message()` in `inbound.py` once they've validated the signature and resolved the hotel — so rate limiting and reply logic apply identically regardless of which provider the message came in on.
+
+## Guest onboarding flow
+- **`templates.py`** — `DEFAULT_GREETING`, the fallback onboarding greeting for hotels with no skill file (see `app/knowledge/hotel_skill.py` and `HotelSettings.hotel_skill_path`).
+- **`flow.py`** — the scripted yes/no + trip-type flow triggered by `POST /admin/hotels/{hotel_id}/guests` (in `app/api/chat.py`) and continued by `inbound.py`'s `_handle_flow_reply`. A declarative `FLOW: dict[GuestFlowState, FlowStep]` — each step's recognized answers (`FlowOption`) branch to the next state or end the flow; adding a step means adding a `FLOW` entry, not new branching code. Currently free-text substring matching (documented tradeoff); a real WhatsApp Business Profile would use approved templates with Quick Reply buttons instead — see the `TODO` at the top of the file.

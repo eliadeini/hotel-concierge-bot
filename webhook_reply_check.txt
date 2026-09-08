@@ -1,0 +1,4 @@
+id=10 region='prague' found_in_kb=True
+Q: What is the most famous dish at U Fleku?
+A: U Fleků (או פלֶקוּ)’s most famous dish is the “Golden Vltava Dumplings” — dumplings filled with caramelized duck. They’re served only on Tuesdays, so it’s best to arrange your visit in advance.
+mentions dumplings: True
