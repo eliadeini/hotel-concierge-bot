@@ -1,7 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.chat import router
 from app.api.meta_whatsapp_webhook import router as meta_whatsapp_router
@@ -32,6 +34,13 @@ app.include_router(router)
 app.include_router(meta_whatsapp_router)
 app.include_router(twilio_whatsapp_router)
 app.include_router(ui_router)
+
+# Static assets for the browser UI (background images, etc.) — no build
+# step/asset pipeline in this repo, so this is a plain file mount rather
+# than anything bundler-driven. See app/ui/README.md.
+_STATIC_DIR = Path(__file__).parent / "ui" / "static"
+_STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
 @app.get("/health")

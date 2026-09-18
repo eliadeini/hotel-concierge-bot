@@ -1,4 +1,11 @@
+import enum
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class UIMode(str, enum.Enum):
+    website = "website"
+    hotel = "hotel"
 
 
 class Settings(BaseSettings):
@@ -20,6 +27,13 @@ class Settings(BaseSettings):
 
     # Shared secret guarding /admin/hotels. Empty means the endpoint is disabled.
     admin_token: str = ""
+
+    # Which template GET / serves (see app/ui/routes.py): "website" is the
+    # general public site (app/ui/templates/website.html); "hotel" serves
+    # the same WhatsApp-lookalike look used for hotel demos. GET /demo
+    # always serves the hotel look regardless of this setting, so it stays
+    # available for demoing to prospective hotel clients either way.
+    ui_mode: UIMode = UIMode.website
 
     openai_model: str = "gpt-5.6-luna"
     claude_model: str = "claude-haiku-4-5-20251001"

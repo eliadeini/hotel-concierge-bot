@@ -12,6 +12,22 @@ class AIEngineType(str, enum.Enum):
     claude = "claude"
 
 
+class PresentationMode(str, enum.Enum):
+    # A real, live hotel (e.g. H34 once it's back in production) — shared
+    # knowledge content is used as-is; landmark references to this hotel
+    # are correct since the tenant IS that business.
+    hotel = "hotel"
+    # The WhatsApp-lookalike hotel demo (GET /demo), for showing
+    # prospective hotel clients what the product looks like — same
+    # as-is treatment as "hotel" above, just a separate tenant/id.
+    hotel_demo = "hotel-demo"
+    # A general-purpose public tenant (e.g. the /chatbot/<location> sites)
+    # — shared knowledge content is passed through a neutralization step
+    # (see app/messaging/inbound.py::gather_context) so it doesn't surface
+    # a specific hotel's name/landmark to anonymous public visitors.
+    website = "website"
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -34,6 +50,14 @@ class HotelSettings(Base):
     # request, like the region knowledge files; None means use the generic
     # defaults in app/messaging/templates.py.
     hotel_skill_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Controls how shared knowledge-base content is presented for this
+    # tenant — see PresentationMode above. Defaults to "hotel" so every
+    # existing/future real-hotel tenant is unaffected unless explicitly
+    # set otherwise.
+    presentation_mode: Mapped[PresentationMode] = mapped_column(
+        Enum(PresentationMode, values_callable=lambda e: [m.value for m in e]),
+        default=PresentationMode.hotel,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
