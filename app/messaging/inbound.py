@@ -14,11 +14,29 @@ from app.knowledge.markdown_source import MarkdownFileSource
 from app.messaging import factory as messaging_factory
 from app.messaging.flow import FLOW, FlowOption
 from app.models.guest_session import GuestSession
-from app.models.hotel_settings import HotelSettings
+from app.models.hotel_settings import HotelSettings, PresentationMode
 
 logger = logging.getLogger(__name__)
 
 _markdown_source = MarkdownFileSource()
+
+# Deterministic substitutions applied only for PresentationMode.website
+# tenants (see gather_context below) — shared knowledge files are written
+# from a specific hotel's perspective (e.g. walking distances "from Hotel
+# H34"), which is correct for that hotel's own tenant but must not leak to
+# a general public site. Ordered longest-pattern-first so "ממלון H34"
+# doesn't get double-substituted after "H34" alone already matched.
+_LANDMARK_NEUTRALIZATIONS = [
+    ("ממלון H34", "ממרכז העיר"),
+    ("מלון H34", "מרכז העיר"),
+    ("H34", "מרכז העיר"),
+]
+
+
+def _neutralize_landmarks(text: str) -> str:
+    for pattern, replacement in _LANDMARK_NEUTRALIZATIONS:
+        text = text.replace(pattern, replacement)
+    return text
 
 
 def gather_context(hotel: HotelSettings) -> tuple[str, str]:
@@ -47,6 +65,8 @@ def gather_context(hotel: HotelSettings) -> tuple[str, str]:
         if text:
             parts.append(f"## Region: {tag}\n{text}")
     combined_context = "\n\n".join(parts)
+    if hotel.presentation_mode == PresentationMode.website:
+        combined_context = _neutralize_landmarks(combined_context)
     region_label = ",".join(tags)[:64]
     return region_label, combined_context
 
