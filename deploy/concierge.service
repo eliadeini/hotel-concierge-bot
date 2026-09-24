@@ -1,0 +1,21 @@
+# Assumes the repo is cloned to /home/ubuntu/hotel-concierge-bot (per the
+# project's deployment target). If your clone path differs, edit the three
+# paths below — deploy/setup.sh will warn you if it detects a mismatch.
+[Unit]
+Description=Hotel Concierge Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/hotel-concierge-bot
+EnvironmentFile=/home/ubuntu/hotel-concierge-bot/.env
+ExecStart=/home/ubuntu/hotel-concierge-bot/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
