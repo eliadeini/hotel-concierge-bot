@@ -1,6 +1,7 @@
 # Secrets — never commit
 .env
 OpenAI API Key.txt
+*.pem
 
 # Local data (SQLite)
 data/
@@ -11,6 +12,7 @@ app/knowledge/files/nahariya/restaurants.md
 
 # Python
 .venv/
+venv/
 __pycache__/
 *.pyc
 .pytest_cache/

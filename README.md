@@ -112,6 +112,41 @@ no network.
   `guest_session` (see `app/models/README.md`)
 - `app/security/crypto.py` — Fernet encryption; master key from env only
 
+## Deployment
+
+Targets an Ubuntu EC2 instance behind Apache, with HTTPS via Certbot and
+deploys via GitHub Actions. See `deploy/` for the actual config.
+
+**Bootstrap a new server** (clone the repo to `/home/ubuntu/hotel-concierge-bot`
+first, then create `.env` there from `.env.example` with real values):
+
+```bash
+git clone <this-repo-url> /home/ubuntu/hotel-concierge-bot
+cd /home/ubuntu/hotel-concierge-bot
+cp .env.example .env   # fill in real values — never commit this file
+./deploy/setup.sh <domain> <email>
+```
+
+This installs system packages, creates a venv, installs the `concierge`
+systemd service (runs `uvicorn` on `127.0.0.1:8000`), and configures Apache
+as a reverse proxy. It's safe to re-run.
+
+**Issue the HTTPS certificate** once DNS for your domain points at the
+server (the command above prints this at the end too):
+
+```bash
+sudo certbot --apache -d <domain> -m <email> --agree-tos --redirect
+```
+
+**Set up GitHub Actions deploys** (push to `main` → SSH in, `git pull`,
+reinstall deps, restart the service): add these repo secrets under
+*Settings → Secrets and variables → Actions*:
+
+- `EC2_HOST` — the server's public IP or domain
+- `EC2_USER` — `ubuntu`
+- `EC2_SSH_KEY` — the private key matching a public key in the server's
+  `~/.ssh/authorized_keys`
+
 ## Local-only data (not in this repo)
 
 Two knowledge files belong to a real hotel this bot was piloted with, and
