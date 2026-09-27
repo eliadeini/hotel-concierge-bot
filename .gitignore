@@ -6,9 +6,14 @@ OpenAI API Key.txt
 # Local data (SQLite)
 data/
 
+# BEGIN private-data
 # Real client data — kept local only, see app/knowledge/README.md
 app/knowledge/hotel_skills/h34-nahariya.md
 app/knowledge/files/nahariya/restaurants.md
+# END private-data
+
+# Local-only sync config (server host, etc.) — see deploy/sync-private-data.env.example
+deploy/sync-private-data.env
 
 # Python
 .venv/
