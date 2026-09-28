@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# Pushes the gitignored "real client data" files (see .gitignore's
+# BEGIN/END private-data block) from this machine straight to the server
+# over SSH — bypassing GitHub entirely, since these files must never be
+# committed to the public repo. Run manually, on demand, after adding or
+# changing a knowledge/skill file locally. No service restart needed
+# afterwards: the app re-reads these files from disk on every request.
+#
+# Usage: deploy/sync-private-data.sh [--dry-run] [--host H] [--user U] [--key PATH]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REMOTE_BASE="/home/ubuntu/hotel-concierge-bot"
+
+DRY_RUN=false
+CLI_HOST=""
+CLI_USER=""
+CLI_KEY=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY_RUN=true; shift ;;
+    --host) CLI_HOST="$2"; shift 2 ;;
+    --user) CLI_USER="$2"; shift 2 ;;
+    --key) CLI_KEY="$2"; shift 2 ;;
+    -h|--help)
+      echo "Usage: $0 [--dry-run] [--host H] [--user U] [--key PATH]"
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Local config file (gitignored) — see deploy/sync-private-data.env.example.
+if [[ -f "$SCRIPT_DIR/sync-private-data.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/sync-private-data.env"
+fi
+
+EC2_HOST="${CLI_HOST:-${EC2_HOST:-}}"
+EC2_USER="${CLI_USER:-${EC2_USER:-ubuntu}}"
+EC2_SSH_KEY_PATH="${CLI_KEY:-${EC2_SSH_KEY_PATH:-}}"
+
+if [[ -z "$EC2_HOST" ]]; then
+  echo "ERROR: no server host configured." >&2
+  echo "Copy deploy/sync-private-data.env.example to deploy/sync-private-data.env" >&2
+  echo "and set EC2_HOST, or pass --host <host>." >&2
+  exit 1
+fi
+
+SSH_OPTS=()
+SSH_CMD="ssh"
+if [[ -n "$EC2_SSH_KEY_PATH" ]]; then
+  SSH_OPTS+=(-i "$EC2_SSH_KEY_PATH")
+  SSH_CMD+=" -i $(printf '%q' "$EC2_SSH_KEY_PATH")"
+fi
+
+# Extract repo-relative paths from .gitignore's private-data block — the
+# single source of truth, so onboarding a new hotel's file only means
+# adding one line there, never touching this script.
+mapfile -t RAW_LINES < <(awk '/^# BEGIN private-data$/{f=1;next} /^# END private-data$/{f=0} f' "$REPO_DIR/.gitignore")
+
+PATHS=()
+for line in "${RAW_LINES[@]}"; do
+  trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  [[ -z "$trimmed" ]] && continue
+  [[ "$trimmed" == \#* ]] && continue
+  PATHS+=("$trimmed")
+done
+
+if [[ ${#PATHS[@]} -eq 0 ]]; then
+  echo "ERROR: no paths found between # BEGIN private-data / # END private-data in .gitignore" >&2
+  exit 1
+fi
+
+LOCAL_FILES=()
+REMOTE_FILES=()
+for p in "${PATHS[@]}"; do
+  local_path="$REPO_DIR/$p"
+  if [[ ! -f "$local_path" ]]; then
+    echo "WARNING: $p not found locally — skipping" >&2
+    continue
+  fi
+  LOCAL_FILES+=("$local_path")
+  REMOTE_FILES+=("$REMOTE_BASE/$p")
+done
+
+if [[ ${#LOCAL_FILES[@]} -eq 0 ]]; then
+  echo "ERROR: none of the private-data paths exist locally — nothing to sync." >&2
+  exit 1
+fi
+
+if $DRY_RUN; then
+  echo "Dry run — would sync:"
+  for i in "${!LOCAL_FILES[@]}"; do
+    echo "  ${LOCAL_FILES[$i]} -> $EC2_USER@$EC2_HOST:${REMOTE_FILES[$i]}"
+  done
+  exit 0
+fi
+
+# Batch-create every needed remote directory in a single SSH round trip.
+declare -A SEEN_DIRS
+REMOTE_DIRS=()
+for rf in "${REMOTE_FILES[@]}"; do
+  d="$(dirname "$rf")"
+  if [[ -z "${SEEN_DIRS[$d]:-}" ]]; then
+    SEEN_DIRS[$d]=1
+    REMOTE_DIRS+=("$d")
+  fi
+done
+
+MKDIR_ARGS=""
+for d in "${REMOTE_DIRS[@]}"; do
+  MKDIR_ARGS+=" $(printf '%q' "$d")"
+done
+ssh "${SSH_OPTS[@]}" "$EC2_USER@$EC2_HOST" "mkdir -p$MKDIR_ARGS"
+
+USE_RSYNC=false
+if command -v rsync >/dev/null 2>&1; then
+  USE_RSYNC=true
+fi
+
+for i in "${!LOCAL_FILES[@]}"; do
+  lf="${LOCAL_FILES[$i]}"
+  rf="${REMOTE_FILES[$i]}"
+  echo "Syncing ${lf#"$REPO_DIR/"} ..."
+  if $USE_RSYNC; then
+    rsync -az -e "$SSH_CMD" "$lf" "$EC2_USER@$EC2_HOST:$rf"
+  else
+    # Stream via ssh+cat rather than the scp binary: scp's own remote-path
+    # quoting is unreliable for paths containing spaces (e.g. the Hebrew
+    # region directory names already used in app/knowledge/files/), whereas
+    # here we control the exact quoting of the remote command ourselves.
+    ssh "${SSH_OPTS[@]}" "$EC2_USER@$EC2_HOST" "cat > $(printf '%q' "$rf")" < "$lf"
+  fi
+done
+
+echo
+echo "Sync complete — no service restart needed, these files are read fresh from disk on every request."

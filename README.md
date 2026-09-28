@@ -191,3 +191,31 @@ updated: 2026-08-01
 ---
 כ-5 דקות הליכה ממלון הדוגמה. מומלץ לארוחה יושבת, לא רק למשלוחים.
 ```
+
+### Syncing to the server
+
+These files are gitignored on purpose, so `git pull` on the server (and thus
+the GitHub Actions deploy) never fetches, touches, or overwrites them —
+`deploy/sync-private-data.sh` pushes them there directly over SSH instead,
+bypassing GitHub entirely.
+
+Run it:
+- once, right after bootstrapping a new server (`deploy/setup.sh`/`git pull`
+  never populate these files, so a fresh server has none until you do);
+- again any time you add or edit a knowledge/skill file locally.
+
+Setup (one-time): copy `deploy/sync-private-data.env.example` to
+`deploy/sync-private-data.env` and set `EC2_HOST` to the same server the
+GitHub Actions deploy targets (reuses the same SSH access — no new
+credentials needed). Then:
+
+```bash
+deploy/sync-private-data.sh --dry-run   # preview what would be copied
+deploy/sync-private-data.sh             # actually sync
+```
+
+No service restart needed afterwards — these files are read fresh from disk
+on every request. New hotels are picked up automatically: the script reads
+its file list from `.gitignore`'s `# BEGIN private-data` / `# END private-data`
+block, so onboarding a new hotel's private file only means adding one line
+there.
