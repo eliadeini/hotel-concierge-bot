@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Pushes the gitignored "real client data" files (see .gitignore's
-# BEGIN/END private-data block) from this machine straight to the server
-# over SSH — bypassing GitHub entirely, since these files must never be
-# committed to the public repo. Run manually, on demand, after adding or
-# changing a knowledge/skill file locally. No service restart needed
-# afterwards: the app re-reads these files from disk on every request.
+# Mirrors app/knowledge/files/ and app/knowledge/hotel_skills/ to the
+# server over SSH, bypassing GitHub (some files in there are gitignored
+# real client data — see .gitignore). Run after editing a knowledge file.
 #
 # Usage: deploy/sync-private-data.sh [--dry-run] [--host H] [--user U] [--key PATH]
 set -euo pipefail
@@ -59,38 +56,21 @@ if [[ -n "$EC2_SSH_KEY_PATH" ]]; then
   SSH_CMD+=" -i $(printf '%q' "$EC2_SSH_KEY_PATH")"
 fi
 
-# Extract repo-relative paths from .gitignore's private-data block — the
-# single source of truth, so onboarding a new hotel's file only means
-# adding one line there, never touching this script.
-mapfile -t RAW_LINES < <(awk '/^# BEGIN private-data$/{f=1;next} /^# END private-data$/{f=0} f' "$REPO_DIR/.gitignore")
-
-PATHS=()
-for line in "${RAW_LINES[@]}"; do
-  trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-  [[ -z "$trimmed" ]] && continue
-  [[ "$trimmed" == \#* ]] && continue
-  PATHS+=("$trimmed")
-done
-
-if [[ ${#PATHS[@]} -eq 0 ]]; then
-  echo "ERROR: no paths found between # BEGIN private-data / # END private-data in .gitignore" >&2
-  exit 1
-fi
+SOURCE_DIRS=("app/knowledge/files" "app/knowledge/hotel_skills")
 
 LOCAL_FILES=()
 REMOTE_FILES=()
-for p in "${PATHS[@]}"; do
-  local_path="$REPO_DIR/$p"
-  if [[ ! -f "$local_path" ]]; then
-    echo "WARNING: $p not found locally — skipping" >&2
-    continue
-  fi
-  LOCAL_FILES+=("$local_path")
-  REMOTE_FILES+=("$REMOTE_BASE/$p")
+for dir in "${SOURCE_DIRS[@]}"; do
+  local_dir="$REPO_DIR/$dir"
+  [[ -d "$local_dir" ]] || continue
+  while IFS= read -r -d '' local_path; do
+    LOCAL_FILES+=("$local_path")
+    REMOTE_FILES+=("$REMOTE_BASE/${local_path#"$REPO_DIR/"}")
+  done < <(find "$local_dir" -type f -print0)
 done
 
 if [[ ${#LOCAL_FILES[@]} -eq 0 ]]; then
-  echo "ERROR: none of the private-data paths exist locally — nothing to sync." >&2
+  echo "ERROR: no files found under ${SOURCE_DIRS[*]} — nothing to sync." >&2
   exit 1
 fi
 
