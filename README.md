@@ -149,11 +149,15 @@ reinstall deps, restart the service): add these repo secrets under
 
 ## Local-only data (not in this repo)
 
-Two knowledge files belong to a real hotel this bot was piloted with, and
-are intentionally excluded from git (see `.gitignore`) so no real business's
-name or address ends up in a public repo. To run the bot against your own
-hotel, create your own copies at the same paths — both have a tracked
-fictional example showing the exact format to follow.
+Real hotel knowledge content — the business names, addresses, and
+recommendations this bot was piloted with — is intentionally excluded from
+git so none of it ends up in a public repo. The convention is private by
+default: any file directly inside `app/knowledge/hotel_skills/` or inside a
+region folder under `app/knowledge/files/` is gitignored unless explicitly
+allowlisted in `.gitignore`, so a new hotel's files need no `.gitignore`
+edit to stay private. A handful of files are explicitly allowlisted as
+public, fictional examples showing the exact format to follow — see the
+two sections below.
 
 ### `app/knowledge/hotel_skills/<your-hotel-id>.md`
 **Purpose:** the hotel's WhatsApp onboarding greeting plus tone/branding
@@ -215,7 +219,8 @@ deploy/sync-private-data.sh             # actually sync
 ```
 
 No service restart needed afterwards — these files are read fresh from disk
-on every request. New hotels are picked up automatically: the script reads
-its file list from `.gitignore`'s `# BEGIN private-data` / `# END private-data`
-block, so onboarding a new hotel's private file only means adding one line
-there.
+on every request. The script mirrors the entire `app/knowledge/files/` and
+`app/knowledge/hotel_skills/` directories (public example files included —
+harmless, since that's identical to what git already delivers there), so a
+new hotel's private files are picked up automatically with no script or
+`.gitignore` change needed — see the file-privacy convention below.

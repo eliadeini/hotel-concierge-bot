@@ -6,17 +6,23 @@ OpenAI API Key.txt
 # Local data (SQLite)
 data/
 
-# BEGIN private-data
-# Real client data — kept local only, see app/knowledge/README.md
-app/knowledge/hotel_skills/h34-nahariya.md
-app/knowledge/files/nahariya/restaurants.md
-app/knowledge/files/nahariya/cinemas.md
-app/knowledge/files/nahariya/beaches.md
-app/knowledge/files/nahariya/pizzerias.md
-app/knowledge/files/nahariya/shawarma-falafel.md
-app/knowledge/files/nahariya/malls-shopping.md
-app/knowledge/files/גליל מערבי/nearby-trips.md
-# END private-data
+# Real client data — private by default, see app/knowledge/README.md.
+# Any file directly inside any region folder under files/, or inside
+# hotel_skills/, is gitignored unless explicitly un-ignored below — so a
+# brand-new hotel's files are safe-by-default with no .gitignore edit
+# needed. Only the known-public example/generic files are allowlisted.
+app/knowledge/files/*/*
+!app/knowledge/files/example-region/restaurants.md
+!app/knowledge/files/eilat/attractions.md
+!app/knowledge/files/kiryat-shmona/attractions.md
+!app/knowledge/files/kiryat-shmona/restaurants.md
+!app/knowledge/files/prague/restaurants.md
+!app/knowledge/files/nahariya/attractions.md
+!app/knowledge/files/גליל מערבי/attractions.md
+
+app/knowledge/hotel_skills/*
+!app/knowledge/hotel_skills/example.md
+!app/knowledge/hotel_skills/nahariya-guide.md
 
 # Local-only sync config (server host, etc.) — see deploy/sync-private-data.env.example
 deploy/sync-private-data.env
