@@ -65,7 +65,10 @@ def test_demo_ask_happy_path(client, db, monkeypatch):
     response = client.post("/demo/ask", json={"question": "Where should I eat?"})
 
     assert response.status_code == 200
-    assert response.json() == {"text": "echo: Where should I eat?", "found_in_kb": True}
+    body = response.json()
+    assert body["text"] == "echo: Where should I eat?"
+    assert body["found_in_kb"] is True
+    assert isinstance(body["conversation_id"], int)
     assert len(fake_engine.calls) == 1
     # Merged multi-tag context, same as the real WhatsApp path — proves
     # gather_context() is actually being used, not a separate/simpler lookup.
@@ -114,7 +117,10 @@ def test_nahariya_chatbot_ask_happy_path(client, db, monkeypatch):
     response = client.post("/chatbot/nahariya/ask", json={"question": "Where should I eat?"})
 
     assert response.status_code == 200
-    assert response.json() == {"text": "echo: Where should I eat?", "found_in_kb": True}
+    body = response.json()
+    assert body["text"] == "echo: Where should I eat?"
+    assert body["found_in_kb"] is True
+    assert isinstance(body["conversation_id"], int)
     assert len(fake_engine.calls) == 1
 
 

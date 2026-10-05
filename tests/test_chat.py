@@ -21,7 +21,9 @@ def test_chat_happy_path(client):
     )
     assert response.status_code == 200
     body = response.json()
-    assert body == {"text": "echo: Where to eat?", "found_in_kb": True}
+    assert body["text"] == "echo: Where to eat?"
+    assert body["found_in_kb"] is True
+    assert isinstance(body["conversation_id"], int)
 
 
 def test_chat_never_leaks_raw_provider_response(client):

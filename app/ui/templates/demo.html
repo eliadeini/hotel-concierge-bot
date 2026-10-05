@@ -174,6 +174,58 @@
     cursor: default;
   }
   #send:not(:disabled):active { background: var(--teal-dark); }
+
+  /* --- Guest note / like-dislike controls --- */
+  .note-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 2px;
+    padding: 0 4px;
+  }
+  .note-btn {
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    opacity: 0.7;
+  }
+  .note-btn:hover:not(:disabled) { opacity: 1; background: #00000010; }
+  .note-btn:disabled { cursor: default; }
+  .note-btn-active { opacity: 1; background: #00000018; }
+  .note-suggest-link {
+    font-size: 11px;
+    color: #667781;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .note-box {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    padding: 0 4px;
+    align-items: flex-end;
+  }
+  .note-box textarea {
+    flex: 1 1 auto;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: none;
+  }
+  .note-box button {
+    border: none;
+    background: var(--teal);
+    color: white;
+    border-radius: 14px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -237,6 +289,85 @@
     scrollToBottom();
   }
 
+  function appendNoteActions(row, conversationId) {
+    const actions = document.createElement("div");
+    actions.className = "note-actions";
+
+    const likeBtn = document.createElement("button");
+    likeBtn.className = "note-btn";
+    likeBtn.textContent = "👍";
+    likeBtn.title = "אהבתי את התשובה";
+
+    const dislikeBtn = document.createElement("button");
+    dislikeBtn.className = "note-btn";
+    dislikeBtn.textContent = "👎";
+    dislikeBtn.title = "לא אהבתי את התשובה";
+
+    const suggestLink = document.createElement("span");
+    suggestLink.className = "note-suggest-link";
+    suggestLink.textContent = "💬 יש לך הערה?";
+
+    async function sendReaction(sentiment, btn) {
+      likeBtn.disabled = true;
+      dislikeBtn.disabled = true;
+      btn.classList.add("note-btn-active");
+      try {
+        await fetch("/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversation_id: conversationId, sentiment: sentiment }),
+        });
+      } catch (err) {
+        // Best-effort — no need to surface a network error for a reaction click.
+      }
+    }
+
+    likeBtn.addEventListener("click", () => sendReaction("like", likeBtn));
+    dislikeBtn.addEventListener("click", () => sendReaction("dislike", dislikeBtn));
+    suggestLink.addEventListener("click", () => openNoteBox(row, conversationId, suggestLink));
+
+    actions.appendChild(likeBtn);
+    actions.appendChild(dislikeBtn);
+    actions.appendChild(suggestLink);
+    row.appendChild(actions);
+    scrollToBottom();
+  }
+
+  function openNoteBox(row, conversationId, link) {
+    link.remove();
+    const box = document.createElement("div");
+    box.className = "note-box";
+
+    const textarea = document.createElement("textarea");
+    textarea.rows = 2;
+    textarea.placeholder = "מה תרצה לספר לנו?";
+
+    const sendBtn = document.createElement("button");
+    sendBtn.textContent = "שלח";
+
+    sendBtn.addEventListener("click", async () => {
+      const message = textarea.value.trim();
+      if (!message) return;
+      sendBtn.disabled = true;
+      textarea.disabled = true;
+      try {
+        await fetch("/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversation_id: conversationId, message: message }),
+        });
+        box.textContent = "תודה, קיבלנו את ההערה שלך!";
+      } catch (err) {
+        box.textContent = "שגיאה בשליחת ההערה.";
+      }
+    });
+
+    box.appendChild(textarea);
+    box.appendChild(sendBtn);
+    row.appendChild(box);
+    scrollToBottom();
+  }
+
   function appendTypingIndicator() {
     const row = document.createElement("div");
     row.className = "bubble-row in";
@@ -276,6 +407,7 @@
         const data = await response.json();
         const answerRow = appendBubble(data.text, "in");
         appendMeta(answerRow, data.found_in_kb);
+        appendNoteActions(answerRow, data.conversation_id);
       }
     } catch (err) {
       typingRow.remove();

@@ -20,6 +20,7 @@ from app.messaging.templates import DEFAULT_GREETING
 from app.models.conversation_log import ConversationLog
 from app.models.guest_session import GuestFlowState, GuestSession
 from app.models.hotel_settings import AIEngineType, HotelSettings
+from app.models.user_note import UserNote, UserNoteStatus
 from app.prompts import build_system_prompt
 from app.security.crypto import encrypt_key
 
@@ -54,6 +55,9 @@ class ChatResponse(BaseModel):
     # debug data and must never reach clients.
     text: str
     found_in_kb: bool
+    # Lets the caller submit a UserNote (like/dislike/free-text) against
+    # this specific exchange later — see app/user_notes.py.
+    conversation_id: int
 
 
 def answer_question(
@@ -63,14 +67,15 @@ def answer_question(
     context: str,
     db: Session,
     engine_factory,
-) -> EngineResponse:
+) -> tuple[EngineResponse, int]:
     """Core chat logic — shared by the /chat endpoint, the WhatsApp webhook
     handlers, and the browser demo (app/ui/routes.py). Callers build
     `context` themselves (a single region's knowledge for /chat, merged
     multi-tag knowledge for WhatsApp/demo — see
     app/messaging/inbound.py::gather_context) so this function doesn't need
     to know how context was gathered. `region` is stored on the log entry
-    only. Raises UnknownHotelError for an unknown hotel_id."""
+    only. Raises UnknownHotelError for an unknown hotel_id. Returns the
+    engine's response alongside the new ConversationLog row's id."""
     engine = engine_factory(hotel_id, db)
 
     system_prompt = build_system_prompt()
@@ -98,18 +103,17 @@ def answer_question(
     )
 
     # Anonymous log: question, answer, found_in_kb — no guest identifiers.
-    db.add(
-        ConversationLog(
-            hotel_id=hotel_id,
-            region=region,
-            question=question,
-            answer=result.text,
-            found_in_kb=result.found_in_kb,
-            ai_engine=engine.provider_name,
-        )
+    conversation = ConversationLog(
+        hotel_id=hotel_id,
+        region=region,
+        question=question,
+        answer=result.text,
+        found_in_kb=result.found_in_kb,
+        ai_engine=engine.provider_name,
     )
+    db.add(conversation)
     db.commit()
-    return result
+    return result, conversation.id
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -121,13 +125,15 @@ def chat(
 ) -> ChatResponse:
     context = source.get_context(req.hotel_id, req.region)
     try:
-        result = answer_question(
+        result, conversation_id = answer_question(
             req.hotel_id, req.region, req.question, context, db, engine_factory
         )
     except UnknownHotelError:
         raise HTTPException(status_code=404, detail="Unknown hotel_id")
 
-    return ChatResponse(text=result.text, found_in_kb=result.found_in_kb)
+    return ChatResponse(
+        text=result.text, found_in_kb=result.found_in_kb, conversation_id=conversation_id
+    )
 
 
 class HotelUpsertRequest(BaseModel):
@@ -232,3 +238,56 @@ async def checkin_guest(
         "check_out": row.check_out.isoformat() if row.check_out else None,
         "welcome_sent": sent,
     }
+
+
+@router.get("/admin/notes")
+def list_notes(
+    x_admin_token: str = Header(default=""),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """Guest like/dislike/free-text reactions, newest first, each shown
+    alongside the question+answer it's about — see app/user_notes.py."""
+    if not settings.admin_token:
+        raise HTTPException(status_code=503, detail="Admin endpoint not configured")
+    if not secrets.compare_digest(x_admin_token, settings.admin_token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+    notes = db.query(UserNote).order_by(UserNote.created_at.desc()).all()
+    return [
+        {
+            "id": note.id,
+            "status": note.status.value,
+            "channel": note.channel,
+            "sentiment": note.sentiment.value if note.sentiment else None,
+            "message": note.message,
+            "created_at": note.created_at.isoformat(),
+            "conversation": {
+                "hotel_id": note.conversation.hotel_id,
+                "region": note.conversation.region,
+                "question": note.conversation.question,
+                "answer": note.conversation.answer,
+                "found_in_kb": note.conversation.found_in_kb,
+            },
+        }
+        for note in notes
+    ]
+
+
+@router.post("/admin/notes/{note_id}/resolve")
+def resolve_note(
+    note_id: int,
+    x_admin_token: str = Header(default=""),
+    db: Session = Depends(get_db),
+) -> dict:
+    if not settings.admin_token:
+        raise HTTPException(status_code=503, detail="Admin endpoint not configured")
+    if not secrets.compare_digest(x_admin_token, settings.admin_token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+    note = db.query(UserNote).filter_by(id=note_id).one_or_none()
+    if note is None:
+        raise HTTPException(status_code=404, detail="Unknown note id")
+    note.status = UserNoteStatus.reviewed
+    db.commit()
+
+    return {"id": note.id, "status": note.status.value}
