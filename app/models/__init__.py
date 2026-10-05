@@ -5,6 +5,7 @@ from app.models.hotel_messaging_settings import HotelMessagingSettings, Messagin
 from app.models.hotel_region_tag import HotelRegionTag
 from app.models.hotel_settings import AIEngineType, HotelSettings
 from app.models.message_rate_limit import MessageRateLimitCounter, RateLimitScope
+from app.models.user_note import UserNote, UserNoteSentiment, UserNoteStatus
 
 __all__ = [
     "AIEngineType",
@@ -19,4 +20,7 @@ __all__ = [
     "MessagingProviderType",
     "RateLimitScope",
     "TripType",
+    "UserNote",
+    "UserNoteSentiment",
+    "UserNoteStatus",
 ]

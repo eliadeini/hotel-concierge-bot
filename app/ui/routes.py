@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.api.chat import ChatResponse, answer_question
@@ -20,6 +20,8 @@ from app.db import get_db
 from app.engines import factory as engine_factory
 from app.messaging.inbound import gather_context
 from app.models.hotel_settings import HotelSettings
+from app.models.user_note import UserNoteSentiment
+from app.user_notes import submit_user_note
 
 router = APIRouter()
 
@@ -42,6 +44,18 @@ class DemoAskRequest(BaseModel):
     question: str = Field(min_length=1)
 
 
+class NoteRequest(BaseModel):
+    conversation_id: int
+    message: str | None = None
+    sentiment: UserNoteSentiment | None = None
+
+    @model_validator(mode="after")
+    def _require_content(self):
+        if self.message is None and self.sentiment is None:
+            raise ValueError("Provide a message, a sentiment, or both.")
+        return self
+
+
 def _ask(hotel_id: str, question: str, db: Session) -> ChatResponse:
     """Shared by both browser ask endpoints below — hotel lookup,
     gather_context, answer_question, mirroring
@@ -62,13 +76,15 @@ def _ask(hotel_id: str, question: str, db: Session) -> ChatResponse:
 
     region_label, context = gather_context(hotel)
     try:
-        result = answer_question(
+        result, conversation_id = answer_question(
             hotel_id, region_label, question, context, db, engine_factory.get_engine
         )
     except engine_factory.UnknownHotelError:
         raise HTTPException(status_code=404, detail="Unknown hotel_id")
 
-    return ChatResponse(text=result.text, found_in_kb=result.found_in_kb)
+    return ChatResponse(
+        text=result.text, found_in_kb=result.found_in_kb, conversation_id=conversation_id
+    )
 
 
 @router.get("/demo", response_class=HTMLResponse)
@@ -106,3 +122,18 @@ def demo_ask(req: DemoAskRequest, db: Session = Depends(get_db)) -> ChatResponse
 @router.post("/chatbot/nahariya/ask", response_model=ChatResponse)
 def nahariya_chatbot_ask(req: DemoAskRequest, db: Session = Depends(get_db)) -> ChatResponse:
     return _ask(NAHARIYA_GUIDE_HOTEL_ID, req.question, db)
+
+
+@router.post("/notes")
+def submit_note(req: NoteRequest, db: Session = Depends(get_db)) -> dict:
+    """Guest reaction (like/dislike and/or free text) to a specific
+    exchange — shared by the demo and website chat UIs. Not tenant-scoped:
+    conversation_id already identifies which hotel the note belongs to.
+    See app/user_notes.py."""
+    try:
+        note = submit_user_note(
+            req.conversation_id, "website", db, message=req.message, sentiment=req.sentiment
+        )
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Unknown conversation_id")
+    return {"id": note.id}

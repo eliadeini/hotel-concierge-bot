@@ -98,19 +98,35 @@ no network.
 - `app/messaging/` — `MessagingProvider` interface + Twilio/Meta adapters +
   rate-limited factory (WhatsApp provider chosen per hotel, with global
   fallback; see `app/messaging/README.md`)
-- `app/api/chat.py` — `POST /chat`, `POST /admin/hotels`, and
+- `app/api/chat.py` — `POST /chat`, `POST /admin/hotels`,
   `POST /admin/hotels/{hotel_id}/guests` (registers a guest's stay and
   triggers the scripted WhatsApp onboarding flow — see
-  `app/messaging/README.md`)
+  `app/messaging/README.md`), and `GET /admin/notes` /
+  `POST /admin/notes/{id}/resolve` (reviewing guest like/dislike/free-text
+  notes — see "Guest notes" below)
 - `app/api/meta_whatsapp_webhook.py` — `GET`/`POST /webhook/whatsapp`
   (inbound WhatsApp messages via Meta Cloud API; see `app/messaging/README.md`)
 - `app/api/twilio_whatsapp_webhook.py` — `POST /webhook/whatsapp/twilio`
   (same, via Twilio; not currently live-configured)
+- `app/user_notes.py` — `submit_user_note()`, shared by every channel's
+  note-submission path (today: `POST /notes` in `app/ui/routes.py`)
 - `app/models/` — `hotel_settings` (encrypted API keys), `conversation_log`
   (anonymous), plus `hotel_contact`, `hotel_region_tag`,
   `hotel_messaging_settings`, `message_rate_limit_counter`,
-  `guest_session` (see `app/models/README.md`)
+  `guest_session`, `user_note` (see `app/models/README.md`)
 - `app/security/crypto.py` — Fernet encryption; master key from env only
+
+## Guest notes
+
+Guests chatting via the browser UI (`app/ui/templates/demo.html`,
+`website.html`) can 👍/👎 any answer and/or leave a free-text note, tied to
+the specific `conversation_log` row it's about. There's no guest-facing auth
+and no self-service editing — these are a one-way inbox for you to review
+manually (`GET /admin/notes`, same `X-Admin-Token` as `/admin/hotels`) and
+act on yourself. `channel` is recorded per note (`"website"` today) so a
+future WhatsApp trigger (no buttons there — would need a recognized reply
+pattern in `app/messaging/inbound.py`) can feed the same table without a
+schema change.
 
 ## Deployment
 

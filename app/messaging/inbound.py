@@ -138,7 +138,9 @@ async def process_inbound_message(hotel_id: str, from_number: str, question: str
 
         region_label, context = gather_context(hotel)
         try:
-            result = answer_question(
+            # conversation_id: anchor for a future WhatsApp note trigger
+            # (see app/user_notes.py) — unused here for now.
+            result, conversation_id = answer_question(
                 hotel_id, region_label, question, context, db, engine_factory.get_engine
             )
         except engine_factory.UnknownHotelError:

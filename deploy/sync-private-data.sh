@@ -50,10 +50,8 @@ if [[ -z "$EC2_HOST" ]]; then
 fi
 
 SSH_OPTS=()
-SSH_CMD="ssh"
 if [[ -n "$EC2_SSH_KEY_PATH" ]]; then
   SSH_OPTS+=(-i "$EC2_SSH_KEY_PATH")
-  SSH_CMD+=" -i $(printf '%q' "$EC2_SSH_KEY_PATH")"
 fi
 
 SOURCE_DIRS=("app/knowledge/files" "app/knowledge/hotel_skills")
@@ -99,24 +97,16 @@ for d in "${REMOTE_DIRS[@]}"; do
 done
 ssh "${SSH_OPTS[@]}" "$EC2_USER@$EC2_HOST" "mkdir -p$MKDIR_ARGS"
 
-USE_RSYNC=false
-if command -v rsync >/dev/null 2>&1; then
-  USE_RSYNC=true
-fi
-
 for i in "${!LOCAL_FILES[@]}"; do
   lf="${LOCAL_FILES[$i]}"
   rf="${REMOTE_FILES[$i]}"
   echo "Syncing ${lf#"$REPO_DIR/"} ..."
-  if $USE_RSYNC; then
-    rsync -az -e "$SSH_CMD" "$lf" "$EC2_USER@$EC2_HOST:$rf"
-  else
-    # Stream via ssh+cat rather than the scp binary: scp's own remote-path
-    # quoting is unreliable for paths containing spaces (e.g. the Hebrew
-    # region directory names already used in app/knowledge/files/), whereas
-    # here we control the exact quoting of the remote command ourselves.
-    ssh "${SSH_OPTS[@]}" "$EC2_USER@$EC2_HOST" "cat > $(printf '%q' "$rf")" < "$lf"
-  fi
+  # Stream via ssh+cat rather than scp or rsync: scp's remote-path quoting
+  # is unreliable for paths with spaces (e.g. the Hebrew region directory
+  # names under app/knowledge/files/), and both scp and rsync would copy
+  # this machine's CRLF line endings verbatim, corrupting any file that's
+  # also tracked in git (which stores LF). sed strips the trailing \r.
+  sed 's/\r$//' "$lf" | ssh "${SSH_OPTS[@]}" "$EC2_USER@$EC2_HOST" "cat > $(printf '%q' "$rf")"
 done
 
 echo
