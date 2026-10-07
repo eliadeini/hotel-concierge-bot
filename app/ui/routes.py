@@ -38,6 +38,9 @@ NAHARIYA_GUIDE_HOTEL_ID = "nahariya-guide"
 
 _DEMO_HTML = (Path(__file__).parent / "templates" / "demo.html").read_text(encoding="utf-8")
 _WEBSITE_HTML = (Path(__file__).parent / "templates" / "website.html").read_text(encoding="utf-8")
+_ACCESSIBILITY_HTML = (
+    Path(__file__).parent / "templates" / "accessibility.html"
+).read_text(encoding="utf-8")
 
 
 class DemoAskRequest(BaseModel):
@@ -102,6 +105,15 @@ def nahariya_chatbot_page() -> str:
     other locations can get their own page later (/chatbot/eilat, etc.)
     without reshuffling this one's URL."""
     return _WEBSITE_HTML
+
+
+@router.get("/accessibility", response_class=HTMLResponse)
+def accessibility_page() -> str:
+    """The accessibility statement required by regulation 35(ה) to the
+    Equal Rights for Persons with Disabilities (Service Accessibility
+    Adaptations) Regulations, 5773-2013 — linked from the footer of both
+    /demo and /chatbot/nahariya."""
+    return _ACCESSIBILITY_HTML
 
 
 @router.get("/", include_in_schema=False)

@@ -13,6 +13,32 @@
     --bubble-in: #FFFFFF;
   }
   * { box-sizing: border-box; }
+  a:focus-visible, button:focus-visible, textarea:focus-visible, input:focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 2px;
+  }
+  .skip-link {
+    position: absolute;
+    top: -40px;
+    right: 8px;
+    background: var(--teal);
+    color: white;
+    padding: 8px 14px;
+    border-radius: 0 0 6px 6px;
+    z-index: 10;
+    text-decoration: none;
+  }
+  .skip-link:focus {
+    top: 0;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
   html, body {
     margin: 0;
     height: 100%;
@@ -48,8 +74,8 @@
     font-size: 13px;
     flex: 0 0 auto;
   }
-  .header-text { line-height: 1.3; }
-  .header-text .name { font-weight: 600; font-size: 16px; }
+  .header-text { line-height: 1.3; font-size: inherit; font-weight: inherit; margin: 0; }
+  .header-text .name { display: block; font-weight: 600; font-size: 16px; }
   .header-text .status {
     font-size: 12px;
     opacity: 0.85;
@@ -66,8 +92,15 @@
   }
 
   /* --- Chat area --- */
+  main {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
   #chat {
     flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
     padding: 14px 8%;
     display: flex;
@@ -100,16 +133,16 @@
 
   .meta {
     font-size: 11px;
-    color: #667781;
+    color: #4a5a62;
     margin-top: 2px;
     padding: 0 4px;
   }
-  .meta.kb-yes { color: #2b7a3d; }
-  .meta.kb-no { color: #9a7b1f; }
+  .meta.kb-yes { color: #1f5a2d; }
+  .meta.kb-no { color: #6b530c; }
 
   .timestamp {
     font-size: 10.5px;
-    color: #8b9aa0;
+    color: #4a5a62;
     margin-top: 1px;
     padding: 0 4px;
   }
@@ -196,8 +229,12 @@
   .note-btn:disabled { cursor: default; }
   .note-btn-active { opacity: 1; background: #00000018; }
   .note-suggest-link {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
     font-size: 11px;
-    color: #667781;
+    color: #4a5a62;
     cursor: pointer;
     text-decoration: underline;
   }
@@ -226,24 +263,44 @@
     font-size: 12px;
     cursor: pointer;
   }
+
+  footer {
+    flex: 0 0 auto;
+    text-align: center;
+    padding: 6px;
+    background: #F0F0F0;
+  }
+  footer a {
+    font-size: 11px;
+    color: #4a5a62;
+  }
 </style>
 </head>
 <body>
 
+<a href="#main" class="skip-link">דלג לתוכן הראשי</a>
+
 <header>
-  <div class="avatar">HD</div>
-  <div class="header-text">
-    <div class="name">Hotel Demo</div>
-    <div class="status"><span class="online-dot"></span>Online</div>
-  </div>
+  <div class="avatar" aria-hidden="true">HD</div>
+  <h1 class="header-text">
+    <span class="name">Hotel Demo</span>
+    <span class="status"><span class="online-dot" aria-hidden="true"></span>Online</span>
+  </h1>
 </header>
 
-<div id="chat"></div>
+<main id="main">
+  <div id="chat" aria-live="polite"></div>
 
-<div id="input-bar">
-  <textarea id="question" rows="1" placeholder="הקלד/י הודעה..." dir="auto"></textarea>
-  <button id="send" title="שלח">➤</button>
-</div>
+  <div id="input-bar">
+    <label for="question" class="visually-hidden">הקלד/י הודעה</label>
+    <textarea id="question" rows="1" placeholder="הקלד/י הודעה..." dir="auto"></textarea>
+    <button id="send" aria-label="שלח הודעה" title="שלח">➤</button>
+  </div>
+</main>
+
+<footer>
+  <a href="/accessibility">הצהרת נגישות</a>
+</footer>
 
 <script>
   const chat = document.getElementById("chat");
@@ -297,13 +354,17 @@
     likeBtn.className = "note-btn";
     likeBtn.textContent = "👍";
     likeBtn.title = "אהבתי את התשובה";
+    likeBtn.setAttribute("aria-label", "אהבתי את התשובה");
+    likeBtn.setAttribute("aria-pressed", "false");
 
     const dislikeBtn = document.createElement("button");
     dislikeBtn.className = "note-btn";
     dislikeBtn.textContent = "👎";
     dislikeBtn.title = "לא אהבתי את התשובה";
+    dislikeBtn.setAttribute("aria-label", "לא אהבתי את התשובה");
+    dislikeBtn.setAttribute("aria-pressed", "false");
 
-    const suggestLink = document.createElement("span");
+    const suggestLink = document.createElement("button");
     suggestLink.className = "note-suggest-link";
     suggestLink.textContent = "💬 יש לך הערה?";
 
@@ -311,6 +372,7 @@
       likeBtn.disabled = true;
       dislikeBtn.disabled = true;
       btn.classList.add("note-btn-active");
+      btn.setAttribute("aria-pressed", "true");
       try {
         await fetch("/notes", {
           method: "POST",
