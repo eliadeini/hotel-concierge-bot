@@ -1,11 +1,17 @@
-# Hotel Concierge Bot — Phase 1
+# Hotel Concierge Bot
 
-A concierge chat bot for a hotel: answers guest questions by combining LLM
-general knowledge with local Markdown "skills" files, returns a structured
-`found_in_kb` flag, and logs conversations anonymously. Runs as a WhatsApp
-bot from phase 1. Providers (OpenAI / Claude), knowledge storage, and
-WhatsApp messaging (Twilio / Meta) each sit behind an abstraction layer, so
-all three are swappable via configuration.
+A concierge chat bot: answers questions by combining LLM general knowledge
+with local Markdown "skills" files, returns a structured `found_in_kb`
+flag, and logs conversations anonymously. Providers (OpenAI / Claude),
+knowledge storage, and messaging (WhatsApp via Twilio / Meta) each sit
+behind an abstraction layer, so all are swappable via configuration.
+
+**Phase 1** ships as a public **website** chatbot — live at
+<https://www.window-to-the-north.co.il/chatbot/nahariya> — answering
+visitor questions about the Nahariya region (see `app/ui/`). **Phase 2**
+turns this into a WhatsApp concierge bot deployed per-hotel (the
+original concept — see planning docs below); the WhatsApp messaging
+layer already exists in the codebase but isn't the live product yet.
 
 Planning docs: `hotel_concierge_bot_plan.md` (strategy) and
 `claude_code_brief_phase1.md` (implementation brief).
@@ -132,6 +138,10 @@ schema change.
 
 Targets an Ubuntu EC2 instance behind Apache, with HTTPS via Certbot and
 deploys via GitHub Actions. See `deploy/` for the actual config.
+
+**Live deployment:** `window-to-the-north.co.il` (DNS + HTTPS already
+configured — this is the `<domain>` used in `./deploy/setup.sh` and
+`apache-concierge.conf` below) → <https://www.window-to-the-north.co.il/chatbot/nahariya>.
 
 **Bootstrap a new server** (clone the repo to `/home/ubuntu/hotel-concierge-bot`
 first, then create `.env` there from `.env.example` with real values):
