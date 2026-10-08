@@ -60,6 +60,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl restart "$SERVICE_NAME"
 
+echo "==> Installing guest-session purge timer (daily delete-on-checkout)"
+sudo install -m 644 "$SCRIPT_DIR/purge-guest-sessions.service" "/etc/systemd/system/purge-guest-sessions.service"
+sudo install -m 644 "$SCRIPT_DIR/purge-guest-sessions.timer" "/etc/systemd/system/purge-guest-sessions.timer"
+sudo systemctl daemon-reload
+sudo systemctl enable --now purge-guest-sessions.timer
+
 echo "==> Enabling required Apache modules"
 sudo a2enmod proxy proxy_http headers rewrite
 
@@ -73,6 +79,10 @@ sudo systemctl reload apache2
 echo
 echo "==> Setup complete. Service status:"
 sudo systemctl --no-pager status "$SERVICE_NAME" || true
+
+echo
+echo "==> Purge timer status (next scheduled run):"
+sudo systemctl --no-pager list-timers purge-guest-sessions.timer || true
 
 echo
 echo "==> Once DNS for $DOMAIN points at this server, issue the HTTPS certificate with:"

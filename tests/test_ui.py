@@ -51,6 +51,13 @@ def test_accessibility_page_serves_html(client):
     assert "הצהרת נגישות" in response.text
 
 
+def test_privacy_page_serves_html(client):
+    response = client.get("/privacy")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "מדיניות פרטיות" in response.text
+
+
 def test_index_redirects_to_chatbot_in_website_mode(client, monkeypatch):
     monkeypatch.setattr(settings, "ui_mode", UIMode.website)
     response = client.get("/", follow_redirects=False)

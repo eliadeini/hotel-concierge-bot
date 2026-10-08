@@ -1,0 +1,17 @@
+# Assumes the repo is cloned to /home/ubuntu/hotel-concierge-bot (per the
+# project's deployment target) — same assumption as concierge.service.
+# Triggered daily by purge-guest-sessions.timer; not meant to be started
+# directly (Type=oneshot — runs once per trigger and exits).
+[Unit]
+Description=Purge expired GuestSession rows (delete-on-checkout)
+After=network.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/hotel-concierge-bot
+EnvironmentFile=/home/ubuntu/hotel-concierge-bot/.env
+ExecStart=/home/ubuntu/hotel-concierge-bot/.venv/bin/python -m scripts.purge_expired_guest_sessions
+StandardOutput=journal
+StandardError=journal
