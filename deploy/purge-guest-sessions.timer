@@ -1,0 +1,12 @@
+# Triggers purge-guest-sessions.service daily. Persistent=true means a run
+# missed while the server was off (e.g. reboot) fires once as soon as the
+# timer is back up, instead of silently skipping that day.
+[Unit]
+Description=Daily trigger for purge-guest-sessions.service
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

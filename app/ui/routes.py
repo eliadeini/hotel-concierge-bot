@@ -37,10 +37,14 @@ DEMO_HOTEL_ID = "hotel-demo"
 NAHARIYA_GUIDE_HOTEL_ID = "nahariya-guide"
 
 _DEMO_HTML = (Path(__file__).parent / "templates" / "demo.html").read_text(encoding="utf-8")
+
 _WEBSITE_HTML = (Path(__file__).parent / "templates" / "website.html").read_text(encoding="utf-8")
+
 _ACCESSIBILITY_HTML = (
     Path(__file__).parent / "templates" / "accessibility.html"
 ).read_text(encoding="utf-8")
+
+_PRIVACY_HTML = (Path(__file__).parent / "templates" / "privacy.html").read_text(encoding="utf-8")
 
 
 class DemoAskRequest(BaseModel):
@@ -114,6 +118,14 @@ def accessibility_page() -> str:
     Adaptations) Regulations, 5773-2013 — linked from the footer of both
     /demo and /chatbot/nahariya."""
     return _ACCESSIBILITY_HTML
+
+
+@router.get("/privacy", response_class=HTMLResponse)
+def privacy_page() -> str:
+    """The privacy policy required by the notice duty in section 11 of the
+    Protection of Privacy Law, 5741-1981 (as amended by Amendment 13) —
+    linked from the footer of both /demo and /chatbot/nahariya."""
+    return _PRIVACY_HTML
 
 
 @router.get("/", include_in_schema=False)
