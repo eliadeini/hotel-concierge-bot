@@ -19,7 +19,7 @@ from app.messaging.flow import HELP_QUESTION
 from app.messaging.templates import DEFAULT_GREETING
 from app.models.conversation_log import ConversationLog
 from app.models.guest_session import GuestFlowState, GuestSession
-from app.models.hotel_settings import AIEngineType, HotelSettings
+from app.models.hotel_settings import AIEngineType, HotelSettings, PresentationMode
 from app.models.user_note import UserNote, UserNoteStatus
 from app.prompts import build_system_prompt
 from app.security.crypto import encrypt_key
@@ -78,8 +78,9 @@ def answer_question(
     engine's response alongside the new ConversationLog row's id."""
     engine = engine_factory(hotel_id, db)
 
-    system_prompt = build_system_prompt()
     hotel = db.query(HotelSettings).filter_by(hotel_id=hotel_id).one_or_none()
+    presentation_mode = hotel.presentation_mode if hotel else PresentationMode.website
+    system_prompt = build_system_prompt(presentation_mode)
     skill = read_hotel_skill(hotel.hotel_skill_path) if hotel else None
     if skill:
         system_prompt = f"{system_prompt}\n\n<hotel_instructions>\n{skill}\n</hotel_instructions>"
