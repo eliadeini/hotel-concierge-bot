@@ -58,6 +58,13 @@ def test_privacy_page_serves_html(client):
     assert "מדיניות פרטיות" in response.text
 
 
+def test_terms_page_serves_html(client):
+    response = client.get("/terms")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "תנאי שימוש" in response.text
+
+
 def test_index_redirects_to_chatbot_in_website_mode(client, monkeypatch):
     monkeypatch.setattr(settings, "ui_mode", UIMode.website)
     response = client.get("/", follow_redirects=False)
