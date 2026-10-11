@@ -46,6 +46,8 @@ _ACCESSIBILITY_HTML = (
 
 _PRIVACY_HTML = (Path(__file__).parent / "templates" / "privacy.html").read_text(encoding="utf-8")
 
+_TERMS_HTML = (Path(__file__).parent / "templates" / "terms.html").read_text(encoding="utf-8")
+
 
 class DemoAskRequest(BaseModel):
     question: str = Field(min_length=1)
@@ -126,6 +128,14 @@ def privacy_page() -> str:
     Protection of Privacy Law, 5741-1981 (as amended by Amendment 13) —
     linked from the footer of both /demo and /chatbot/nahariya."""
     return _PRIVACY_HTML
+
+
+@router.get("/terms", response_class=HTMLResponse)
+def terms_page() -> str:
+    """Terms of use: nature of the free informational service, content-
+    accuracy disclaimer, and no-liability-for-recommended-businesses clause
+    — linked from the footer of both /demo and /chatbot/nahariya."""
+    return _TERMS_HTML
 
 
 @router.get("/", include_in_schema=False)
