@@ -24,6 +24,27 @@ interface, not a refactor of the endpoint.
   a future DB migration be a script, not an LLM extraction job — the
   structure already exists.
 
+## Freshness and closed businesses
+- **`updated:` is not just bookkeeping — the system prompt (`app/prompts.py`)
+  actually reasons about it.** An entry whose `updated:` date is roughly a
+  year old or more gets treated as "unconfirmed" rather than current fact —
+  the bot will still mention it, but will tell the guest to verify it's
+  still open rather than stating it as settled. Keep `updated:` genuinely
+  current when you touch an entry (e.g. after confirming a place by phone),
+  not just at file creation.
+- **`category: closed`** is a special category convention (see
+  `app/knowledge/files/nahariya/closed.md` for the live example) for
+  businesses known to no longer exist/operate. The system prompt is
+  explicitly instructed to check this list before recommending any business
+  by name — from the knowledge base, `web_search`, or general knowledge —
+  and never recommend a match, even if a web search result about it still
+  looks current. This exists because the bot's `web_search` tool can
+  otherwise surface real but stale/outdated results (a since-closed
+  business, or one mischaracterized as e.g. a bar when it was actually a
+  restaurant) with no local signal to override them. Add a `closed.md` (or
+  an entry in any existing file, category is what matters, not filename)
+  per region as outdated businesses are identified.
+
 ## Notes
 - Region values are restricted to a whitelist (`markdown_source.py`'s
   `_REGION_RE`: ASCII letters/digits/hyphen, the Hebrew Unicode block, and
