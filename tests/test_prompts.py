@@ -24,3 +24,20 @@ def test_instructs_searching_before_giving_up():
     prompt = build_system_prompt(PresentationMode.website)
     assert "web_search" in prompt
     assert prompt.index("web_search") < prompt.index("do not have a specific recommendation")
+
+
+def test_instructs_checking_closed_businesses_list():
+    # Bug report: the bot recommended businesses (Sogo, Crazy Bar) that had
+    # actually closed years ago — the knowledge base now carries a
+    # category: closed list, and the model must be told to check it.
+    prompt = build_system_prompt()
+    assert "category: closed" in prompt
+    assert "Never recommend it" in prompt
+
+
+def test_instructs_recency_caveat_for_unconfirmed_businesses():
+    # Bug report: the bot stated unverified business info (e.g. a bar that
+    # may or may not still be open) as settled fact instead of flagging it.
+    prompt = build_system_prompt()
+    assert "updated date" in prompt
+    assert "verify it is still open" in prompt
