@@ -1,0 +1,52 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class HotelWebPage(Base):
+    """A hotel's generic branded browser chat page — one-to-one with
+    HotelSettings, served at /chatbot/{location}/{slug} (see
+    app/ui/routes.py). No hotel-specific name/text/image ever lives in this
+    table's code — only in the row's data and the gitignored image files
+    under app/ui/hotel_assets/<hotel_id>/ (see that folder's README.md).
+    """
+
+    __tablename__ = "hotel_web_page"
+    __table_args__ = (
+        UniqueConstraint("location", "slug", name="uq_hotel_web_page_location_slug"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    hotel_settings_id: Mapped[int] = mapped_column(
+        ForeignKey("hotel_settings.id", ondelete="CASCADE"), unique=True, index=True
+    )
+
+    # Together form the URL /chatbot/<location>/<slug> — both lowercase,
+    # URL-safe (validated in app/api/chat.py's admin endpoint).
+    location: Mapped[str] = mapped_column(String(64))
+    slug: Mapped[str] = mapped_column(String(64))
+
+    display_name: Mapped[str] = mapped_column(String(128))
+    tagline: Mapped[str] = mapped_column(String(512))
+    page_title: Mapped[str] = mapped_column(String(128))
+
+    # Plain file names only (no path), resolved at render time to
+    # /hotel-assets/<hotel_id>/<file> — see app/ui/hotel_assets/README.md.
+    logo_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    background_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+    hotel: Mapped["HotelSettings"] = relationship(back_populates="web_page")  # noqa: F821

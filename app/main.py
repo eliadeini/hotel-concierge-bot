@@ -42,6 +42,14 @@ _STATIC_DIR = Path(__file__).parent / "ui" / "static"
 _STATIC_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
+# Private per-hotel branding images (logos, backgrounds) — one subfolder
+# per hotel_id, gitignored, synced via deploy/sync-private-data.sh. See
+# app/ui/hotel_assets/README.md. mkdir here so a fresh checkout (which has
+# no hotel subfolders yet, only the tracked README.md) doesn't crash.
+_HOTEL_ASSETS_DIR = Path(__file__).parent / "ui" / "hotel_assets"
+_HOTEL_ASSETS_DIR.mkdir(exist_ok=True)
+app.mount("/hotel-assets", StaticFiles(directory=_HOTEL_ASSETS_DIR), name="hotel-assets")
+
 
 @app.get("/health")
 def health() -> dict:

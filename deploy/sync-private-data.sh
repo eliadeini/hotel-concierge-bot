@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Mirrors app/knowledge/files/ and app/knowledge/hotel_skills/ to the
-# server over SSH, bypassing GitHub (some files in there are gitignored
-# real client data — see .gitignore). Run after editing a knowledge file.
+# Mirrors app/knowledge/files/, app/knowledge/hotel_skills/, and
+# app/ui/hotel_assets/ to the server over SSH, bypassing GitHub (files in
+# there are gitignored real client data/images — see .gitignore). Run
+# after editing a knowledge file or adding/changing a hotel's branding
+# images. Text files (.md/.txt/.yaml/.yml) get their line endings fixed in
+# transit; everything else (e.g. PNG/JPG under hotel_assets/) is copied
+# byte-for-byte unchanged, since that line-ending fix would corrupt a
+# binary file.
 #
 # Usage: deploy/sync-private-data.sh [--dry-run] [--host H] [--user U] [--key PATH]
 set -euo pipefail
@@ -54,7 +59,7 @@ if [[ -n "$EC2_SSH_KEY_PATH" ]]; then
   SSH_OPTS+=(-i "$EC2_SSH_KEY_PATH")
 fi
 
-SOURCE_DIRS=("app/knowledge/files" "app/knowledge/hotel_skills")
+SOURCE_DIRS=("app/knowledge/files" "app/knowledge/hotel_skills" "app/ui/hotel_assets")
 
 LOCAL_FILES=()
 REMOTE_FILES=()
@@ -105,8 +110,18 @@ for i in "${!LOCAL_FILES[@]}"; do
   # is unreliable for paths with spaces (e.g. the Hebrew region directory
   # names under app/knowledge/files/), and both scp and rsync would copy
   # this machine's CRLF line endings verbatim, corrupting any file that's
-  # also tracked in git (which stores LF). sed strips the trailing \r.
-  sed 's/\r$//' "$lf" | ssh "${SSH_OPTS[@]}" "$EC2_USER@$EC2_HOST" "cat > $(printf '%q' "$rf")"
+  # also tracked in git (which stores LF). sed strips the trailing \r —
+  # but only for text files. A binary file (e.g. a PNG/JPG under
+  # app/ui/hotel_assets/) has no meaningful "line endings"; piping it
+  # through sed would corrupt its bytes, so it goes through unchanged.
+  case "$lf" in
+    *.md|*.txt|*.yaml|*.yml)
+      sed 's/\r$//' "$lf" | ssh "${SSH_OPTS[@]}" "$EC2_USER@$EC2_HOST" "cat > $(printf '%q' "$rf")"
+      ;;
+    *)
+      ssh "${SSH_OPTS[@]}" "$EC2_USER@$EC2_HOST" "cat > $(printf '%q' "$rf")" < "$lf"
+      ;;
+  esac
 done
 
 echo

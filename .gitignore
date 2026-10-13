@@ -24,6 +24,12 @@ app/knowledge/hotel_skills/*
 !app/knowledge/hotel_skills/example.md
 !app/knowledge/hotel_skills/nahariya-guide.md
 
+# Private per-hotel branding images — see app/ui/hotel_assets/README.md.
+# Everything inside a hotel's subfolder is ignored; the README itself
+# (one level up from any hotel subfolder) stays tracked with no
+# allowlist line needed.
+app/ui/hotel_assets/*/*
+
 # Local-only sync config (server host, etc.) — see deploy/sync-private-data.env.example
 deploy/sync-private-data.env
 

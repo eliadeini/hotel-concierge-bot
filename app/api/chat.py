@@ -1,4 +1,5 @@
 import logging
+import re
 import secrets
 from datetime import date, datetime, timezone
 
@@ -20,6 +21,7 @@ from app.messaging.templates import DEFAULT_GREETING
 from app.models.conversation_log import ConversationLog
 from app.models.guest_session import GuestFlowState, GuestSession
 from app.models.hotel_settings import AIEngineType, HotelSettings, PresentationMode
+from app.models.hotel_web_page import HotelWebPage
 from app.models.user_note import UserNote, UserNoteStatus
 from app.prompts import build_system_prompt
 from app.security.crypto import encrypt_key
@@ -137,12 +139,93 @@ def chat(
     )
 
 
+# Lowercase, URL-safe only — these two values form the public URL
+# /chatbot/<location>/<slug>. Same allowlist-regex approach as
+# markdown_source.py's _REGION_RE: no "/", "\", or ".." can ever match.
+_SLUG_RE = re.compile(r"^[a-z0-9-]+$")
+
+# Plain file names only — no path separators, can't start with "." (so a
+# bare ".." can never match either) — resolved at render time to
+# /hotel-assets/<hotel_id>/<file>, see app/ui/hotel_assets/README.md.
+_FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+class HotelWebPageData(BaseModel):
+    location: str = Field(min_length=1, max_length=64)
+    slug: str = Field(min_length=1, max_length=64)
+    display_name: str = Field(min_length=1, max_length=128)
+    tagline: str = Field(min_length=1, max_length=512)
+    page_title: str = Field(min_length=1, max_length=128)
+    logo_file: str | None = None
+    background_file: str | None = None
+    enabled: bool = True
+
+
 class HotelUpsertRequest(BaseModel):
     hotel_id: str = Field(min_length=1, max_length=64)
     ai_engine: AIEngineType
     api_key: str = Field(min_length=1)
     is_test: bool = False
     hotel_skill_path: str | None = None
+    # Optional — when provided, the hotel's browser chat page (see
+    # app/ui/routes.py's /chatbot/{location}/{slug}) is created/updated in
+    # the same call, so a hotel doesn't need a separate registration step
+    # to get a page. Can also be set/changed later via PUT
+    # /admin/hotels/{hotel_id}/web-page without resupplying api_key.
+    web_page: HotelWebPageData | None = None
+
+
+def _upsert_web_page(db: Session, hotel: HotelSettings, data: HotelWebPageData) -> dict:
+    """Shared by upsert_hotel (optional nested web_page) and the standalone
+    PUT /admin/hotels/{hotel_id}/web-page endpoint. Assumes hotel.id is
+    already populated (caller must db.flush() first if hotel was just
+    created in this same transaction)."""
+    if not _SLUG_RE.match(data.location) or not _SLUG_RE.match(data.slug):
+        raise HTTPException(
+            status_code=422, detail="location and slug must be lowercase a-z0-9- only"
+        )
+    for file_field in (data.logo_file, data.background_file):
+        if file_field is not None and not _FILENAME_RE.match(file_field):
+            raise HTTPException(
+                status_code=422,
+                detail="File names must be plain names (no slashes, no '..')",
+            )
+
+    conflict = (
+        db.query(HotelWebPage)
+        .filter_by(location=data.location, slug=data.slug)
+        .filter(HotelWebPage.hotel_settings_id != hotel.id)
+        .one_or_none()
+    )
+    if conflict is not None:
+        raise HTTPException(
+            status_code=409, detail="location+slug already in use by another hotel"
+        )
+
+    row = db.query(HotelWebPage).filter_by(hotel_settings_id=hotel.id).one_or_none()
+    if row is None:
+        row = HotelWebPage(hotel_settings_id=hotel.id)
+        db.add(row)
+    row.location = data.location
+    row.slug = data.slug
+    row.display_name = data.display_name
+    row.tagline = data.tagline
+    row.page_title = data.page_title
+    row.logo_file = data.logo_file
+    row.background_file = data.background_file
+    row.enabled = data.enabled
+
+    return {
+        "location": row.location,
+        "slug": row.slug,
+        "display_name": row.display_name,
+        "tagline": row.tagline,
+        "page_title": row.page_title,
+        "logo_file": row.logo_file,
+        "background_file": row.background_file,
+        "enabled": row.enabled,
+        "url": f"/chatbot/{row.location}/{row.slug}",
+    }
 
 
 @router.post("/admin/hotels")
@@ -152,7 +235,9 @@ def upsert_hotel(
     db: Session = Depends(get_db),
 ) -> dict:
     """Minimal admin endpoint (no UI in phase 1): create/update a hotel's
-    engine choice and API key. The key is encrypted at rest and never echoed."""
+    engine choice and API key. The key is encrypted at rest and never
+    echoed. Optionally also creates/updates its browser chat page in the
+    same call — see HotelUpsertRequest.web_page."""
     if not settings.admin_token:
         raise HTTPException(status_code=503, detail="Admin endpoint not configured")
     if not secrets.compare_digest(x_admin_token, settings.admin_token):
@@ -166,14 +251,22 @@ def upsert_hotel(
     row.api_key_encrypted = encrypt_key(req.api_key)
     row.is_test = req.is_test
     row.hotel_skill_path = req.hotel_skill_path
+    # Populates row.id for a brand-new hotel, needed below for the
+    # web page's FK, before we've committed the overall transaction.
+    db.flush()
+
+    web_page_result = _upsert_web_page(db, row, req.web_page) if req.web_page else None
     db.commit()
 
-    return {
+    result = {
         "hotel_id": row.hotel_id,
         "ai_engine": row.ai_engine.value,
         "is_test": row.is_test,
         "hotel_skill_path": row.hotel_skill_path,
     }
+    if web_page_result is not None:
+        result["web_page"] = web_page_result
+    return result
 
 
 def get_messaging_provider_factory():
@@ -239,6 +332,31 @@ async def checkin_guest(
         "check_out": row.check_out.isoformat() if row.check_out else None,
         "welcome_sent": sent,
     }
+
+
+@router.put("/admin/hotels/{hotel_id}/web-page")
+def upsert_hotel_web_page_endpoint(
+    hotel_id: str,
+    req: HotelWebPageData,
+    x_admin_token: str = Header(default=""),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Updates a hotel's browser chat page branding on its own, without
+    resupplying api_key — most hotels will instead get their page created
+    in the same call as POST /admin/hotels (see HotelUpsertRequest.web_page);
+    this exists for editing it afterward."""
+    if not settings.admin_token:
+        raise HTTPException(status_code=503, detail="Admin endpoint not configured")
+    if not secrets.compare_digest(x_admin_token, settings.admin_token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+    hotel = db.query(HotelSettings).filter_by(hotel_id=hotel_id).one_or_none()
+    if hotel is None:
+        raise HTTPException(status_code=404, detail="Unknown hotel_id")
+
+    result = _upsert_web_page(db, hotel, req)
+    db.commit()
+    return {"hotel_id": hotel_id, **result}
 
 
 @router.get("/admin/notes")
