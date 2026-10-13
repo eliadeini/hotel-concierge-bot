@@ -104,9 +104,12 @@ no network.
 - `app/messaging/` — `MessagingProvider` interface + Twilio/Meta adapters +
   rate-limited factory (WhatsApp provider chosen per hotel, with global
   fallback; see `app/messaging/README.md`)
-- `app/api/chat.py` — `POST /chat`, `POST /admin/hotels`,
-  `POST /admin/hotels/{hotel_id}/guests` (registers a guest's stay and
-  triggers the scripted WhatsApp onboarding flow — see
+- `app/api/chat.py` — `POST /chat`, `POST /admin/hotels` (optionally
+  creates/updates the hotel's generic branded page in the same call — see
+  `app/ui/README.md`'s "Generic hotel pages"), `PUT
+  /admin/hotels/{hotel_id}/web-page` (edits that page's branding
+  afterward), `POST /admin/hotels/{hotel_id}/guests` (registers a guest's
+  stay and triggers the scripted WhatsApp onboarding flow — see
   `app/messaging/README.md`), and `GET /admin/notes` /
   `POST /admin/notes/{id}/resolve` (reviewing guest like/dislike/free-text
   notes — see "Guest notes" below)
@@ -118,7 +121,7 @@ no network.
   note-submission path (today: `POST /notes` in `app/ui/routes.py`)
 - `app/models/` — `hotel_settings` (encrypted API keys), `conversation_log`
   (anonymous), plus `hotel_contact`, `hotel_region_tag`,
-  `hotel_messaging_settings`, `message_rate_limit_counter`,
+  `hotel_messaging_settings`, `hotel_web_page`, `message_rate_limit_counter`,
   `guest_session`, `user_note` (see `app/models/README.md`)
 - `app/security/crypto.py` — Fernet encryption; master key from env only
 

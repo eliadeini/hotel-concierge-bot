@@ -80,6 +80,12 @@ class HotelSettings(Base):
         cascade="all, delete-orphan",
     )
 
+    web_page: Mapped["HotelWebPage | None"] = relationship(  # noqa: F821
+        back_populates="hotel",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
     guest_sessions: Mapped[list["GuestSession"]] = relationship(  # noqa: F821
         back_populates="hotel",
         cascade="all, delete-orphan",

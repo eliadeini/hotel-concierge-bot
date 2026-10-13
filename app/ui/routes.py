@@ -7,6 +7,7 @@ implementation, so what's shown here is provably what a real WhatsApp
 message would get. See README.md in this folder for why this exists.
 """
 
+import html
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,6 +21,7 @@ from app.db import get_db
 from app.engines import factory as engine_factory
 from app.messaging.inbound import gather_context
 from app.models.hotel_settings import HotelSettings
+from app.models.hotel_web_page import HotelWebPage
 from app.models.user_note import UserNoteSentiment
 from app.user_notes import submit_user_note
 
@@ -38,7 +40,12 @@ NAHARIYA_GUIDE_HOTEL_ID = "nahariya-guide"
 
 _DEMO_HTML = (Path(__file__).parent / "templates" / "demo.html").read_text(encoding="utf-8")
 
-_WEBSITE_HTML = (Path(__file__).parent / "templates" / "website.html").read_text(encoding="utf-8")
+# Raw template with __TOKEN__ placeholders, not ready-to-serve HTML on its
+# own — see _render_website_page below. Shared by the fixed nahariya page
+# and every generic /chatbot/{location}/{slug} page.
+_WEBSITE_TEMPLATE = (
+    Path(__file__).parent / "templates" / "website.html"
+).read_text(encoding="utf-8")
 
 _ACCESSIBILITY_HTML = (
     Path(__file__).parent / "templates" / "accessibility.html"
@@ -63,6 +70,34 @@ class NoteRequest(BaseModel):
         if self.message is None and self.sentiment is None:
             raise ValueError("Provide a message, a sentiment, or both.")
         return self
+
+
+def _render_website_page(
+    *,
+    page_title: str,
+    site_name: str,
+    tagline: str,
+    bg_image_url: str,
+    logo_html: str,
+    ask_url: str,
+) -> str:
+    """Fills _WEBSITE_TEMPLATE's __TOKEN__ placeholders via str.replace —
+    not str.format, since the CSS is full of literal braces that would
+    collide with format's own {}/{{}} syntax.
+
+    Callers are responsible for html.escape()-ing any value that came from
+    the database before passing it in here — this function does no
+    escaping itself, since the fixed nahariya/demo-style callers pass
+    their own literal (not DB-sourced) strings unescaped on purpose.
+    """
+    return (
+        _WEBSITE_TEMPLATE.replace("__PAGE_TITLE__", page_title)
+        .replace("__SITE_NAME__", site_name)
+        .replace("__TAGLINE__", tagline)
+        .replace("__BG_IMAGE_URL__", bg_image_url)
+        .replace("__LOGO__", logo_html)
+        .replace("__ASK_URL__", ask_url)
+    )
 
 
 def _ask(hotel_id: str, question: str, db: Session) -> ChatResponse:
@@ -109,8 +144,55 @@ def nahariya_chatbot_page() -> str:
     """The general public website look for Nahariya. Path is
     location-scoped (/chatbot/<location>) rather than a flat /website so
     other locations can get their own page later (/chatbot/eilat, etc.)
-    without reshuffling this one's URL."""
-    return _WEBSITE_HTML
+    without reshuffling this one's URL. Fixed/hardcoded values here (not
+    DB-sourced, so not html.escape()'d) — must keep rendering byte-for-byte
+    what this page looked like before /chatbot/{location}/{slug} existed."""
+    return _render_website_page(
+        page_title="נהרייני - מדריך נהרייני מקומי",
+        site_name="נהרייני",
+        tagline=(
+            "מדריך נהרייני מקומי — שאלו אותי כל דבר על ביקור בנהריה: "
+            "חופים, מסעדות, טיולים ועוד"
+        ),
+        bg_image_url="/static/Nahariya-bg.jpg",
+        logo_html="",
+        ask_url="/chatbot/nahariya/ask",
+    )
+
+
+@router.get("/chatbot/{location}/{slug}", response_class=HTMLResponse)
+def hotel_web_page(location: str, slug: str, db: Session = Depends(get_db)) -> str:
+    """Generic, DB-configured hotel page — see HotelWebPage. Registered
+    after the fixed /chatbot/nahariya route above; no actual path-collision
+    risk either way (that route is 1 segment, this one requires 2), but
+    kept in this order regardless. 404 is identical whether the page is
+    missing, disabled, or belongs to a test hotel — never distinguishes, so
+    a prober can't tell "never existed" apart from "exists but disabled"."""
+    row = db.query(HotelWebPage).filter_by(location=location, slug=slug).one_or_none()
+    if row is None or not row.enabled:
+        raise HTTPException(status_code=404, detail="Unknown hotel page")
+    hotel = db.query(HotelSettings).filter_by(id=row.hotel_settings_id).one_or_none()
+    if hotel is None or hotel.is_test:
+        raise HTTPException(status_code=404, detail="Unknown hotel page")
+
+    logo_html = ""
+    if row.logo_file:
+        logo_src = html.escape(f"/hotel-assets/{hotel.hotel_id}/{row.logo_file}")
+        alt = html.escape(f"לוגו {row.display_name}")
+        logo_html = f'<img src="{logo_src}" alt="{alt}" class="site-logo">'
+
+    bg_image_url = ""
+    if row.background_file:
+        bg_image_url = html.escape(f"/hotel-assets/{hotel.hotel_id}/{row.background_file}")
+
+    return _render_website_page(
+        page_title=html.escape(row.page_title),
+        site_name=html.escape(row.display_name),
+        tagline=html.escape(row.tagline),
+        bg_image_url=bg_image_url,
+        logo_html=logo_html,
+        ask_url=f"/chatbot/{location}/{slug}/ask",
+    )
 
 
 @router.get("/accessibility", response_class=HTMLResponse)
@@ -156,6 +238,21 @@ def demo_ask(req: DemoAskRequest, db: Session = Depends(get_db)) -> ChatResponse
 @router.post("/chatbot/nahariya/ask", response_model=ChatResponse)
 def nahariya_chatbot_ask(req: DemoAskRequest, db: Session = Depends(get_db)) -> ChatResponse:
     return _ask(NAHARIYA_GUIDE_HOTEL_ID, req.question, db)
+
+
+@router.post("/chatbot/{location}/{slug}/ask", response_model=ChatResponse)
+def hotel_web_page_ask(
+    location: str, slug: str, req: DemoAskRequest, db: Session = Depends(get_db)
+) -> ChatResponse:
+    """Same lookup/404 rules as GET hotel_web_page above, then the usual
+    _ask() with that row's own hotel_id."""
+    row = db.query(HotelWebPage).filter_by(location=location, slug=slug).one_or_none()
+    if row is None or not row.enabled:
+        raise HTTPException(status_code=404, detail="Unknown hotel page")
+    hotel = db.query(HotelSettings).filter_by(id=row.hotel_settings_id).one_or_none()
+    if hotel is None or hotel.is_test:
+        raise HTTPException(status_code=404, detail="Unknown hotel page")
+    return _ask(hotel.hotel_id, req.question, db)
 
 
 @router.post("/notes")
