@@ -9,7 +9,7 @@ neutralized for the public site without affecting the hotel demo — see
 `app/messaging/inbound.py::gather_context`):
 - **`GET /demo`** (`templates/demo.html`, `POST /demo/ask`) — the WhatsApp-lookalike look, for demoing to hotel clients, backed by `DEMO_HOTEL_ID` (`"hotel-demo"`). Always reachable at this fixed path.
 - **`GET /chatbot/nahariya`** (`templates/website.html`, `POST /chatbot/nahariya/ask`) — the general public site look ("נהרייני"), a plain reskin (no WhatsApp chrome) of the same chat mechanics, backed by its own separate tenant `NAHARIYA_GUIDE_HOTEL_ID` (`"nahariya-guide"`). Hardcoded on purpose — the first, fixed public site — not DB-driven like the generic pages below.
-- **`GET /chatbot/{location}/{slug}`** (`POST /chatbot/{location}/{slug}/ask`) — a **generic**, per-hotel branded page: any hotel in `hotel_settings` can get one, fully configured from data (see "Generic hotel pages" below), no code change needed per hotel. Supports `?lang=he`/`?lang=en` (see below); any other value, or no param at all, falls back to Hebrew.
+- **`GET /chatbot/{location}/{slug}`** (`POST /chatbot/{location}/{slug}/ask`) — a **generic**, per-hotel branded page: any hotel in `hotel_settings` can get one, fully configured from data (see "Generic hotel pages" below), no code change needed per hotel. Supports `?lang=he`/`?lang=en` (see below); any other value, or no param at all, falls back to English.
 - **`GET /`** redirects to the demo or the fixed nahariya page based on `settings.ui_mode` (`UIMode.website` → `/chatbot/nahariya`, `UIMode.hotel` → `/demo`; see `app/config.py`) — it only picks the default front door; every page above stays directly reachable either way.
 
 ## Layout
@@ -66,18 +66,20 @@ docs/commits — substitute your actual values when you run this for real):
    convention, nothing to commit).
 3. Push them to the server: `deploy/sync-private-data.sh` (now also syncs
    `app/ui/hotel_assets/`, binary-safe — see that script's own comments).
-4. Visit `/chatbot/beachtown/demo` (Hebrew, the default) or
-   `/chatbot/beachtown/demo?lang=en` (English). Set `enabled: false` (same
+4. Visit `/chatbot/beachtown/demo` (English, the default) or
+   `/chatbot/beachtown/demo?lang=he` (Hebrew). Set `enabled: false` (same
    PUT endpoint) to take a page down without deleting its data.
 
-**Language switching**: the generic page's `<html lang="...">` and all
-three text fields follow `?lang=he`/`?lang=en` — any other value, or no
-param, falls back to Hebrew (`DEFAULT_LANGUAGE`). This only sets which
-text/language-attribute is shown; the template's CSS is RTL-authored
-regardless of language, so `?lang=en` does **not** flip the layout to
-LTR — a real English layout would need separate CSS, not done here. The
-fixed `/demo` and `/chatbot/nahariya` pages don't take this param at
-all — they're hardcoded to a single language exactly as before.
+**Language switching**: the generic page's `<html lang="...">`, the
+hotel's own `display_name`/`tagline`/`page_title`, and all of the
+template's shared chrome text (input placeholder, send button,
+accessibility label, error messages, footer links — `UI_STRINGS` in
+`app/ui/strings.py`) follow `?lang=he`/`?lang=en` — any other value, or
+no param, falls back to English (`DEFAULT_LANGUAGE`). There's no
+RTL/LTR-specific CSS in this template to flip either way — both
+languages render in the same layout. The fixed `/demo` and
+`/chatbot/nahariya` pages don't take this param at all — they're
+hardcoded to Hebrew exactly as before.
 
 A hotel with `is_test=True` (`HotelSettings.is_test`) never gets served
 here — same 404 as a missing or disabled page, so a prober can't tell

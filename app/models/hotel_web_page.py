@@ -12,7 +12,7 @@ from app.db import Base
 # CSS, which currently assumes Hebrew/RTL regardless of which language is
 # actually shown. See app/ui/README.md.
 SUPPORTED_LANGUAGES = {"he", "en"}
-DEFAULT_LANGUAGE = "he"
+DEFAULT_LANGUAGE = "en"
 
 
 def _utcnow() -> datetime:

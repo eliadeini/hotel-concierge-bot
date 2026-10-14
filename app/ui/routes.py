@@ -23,6 +23,7 @@ from app.messaging.inbound import gather_context
 from app.models.hotel_settings import HotelSettings
 from app.models.hotel_web_page import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, HotelWebPage, pick_language
 from app.models.user_note import UserNoteSentiment
+from app.ui.strings import UI_STRINGS
 from app.user_notes import submit_user_note
 
 router = APIRouter()
@@ -91,12 +92,13 @@ def _render_website_page(
     escaping itself, since the fixed nahariya/demo-style callers pass
     their own literal (not DB-sourced) strings unescaped on purpose.
 
-    `lang` only sets the <html lang="..."> attribute (correct for
-    accessibility/screen readers) — it does NOT flip the page's layout
-    direction. The template's CSS is written assuming Hebrew/RTL
-    regardless of which language is actually shown; a genuinely correct
-    LTR layout for English is a separate, not-yet-done task.
+    `lang` sets the <html lang="..."> attribute and selects which
+    language's chrome text (UI_STRINGS, app/ui/strings.py) is used for the
+    input placeholder, error messages, and footer links — it does not
+    otherwise change the page's layout; there's no RTL/LTR-specific CSS in
+    this template to flip either way.
     """
+    ui = UI_STRINGS.get(lang, UI_STRINGS[DEFAULT_LANGUAGE])
     return (
         _WEBSITE_TEMPLATE.replace("__PAGE_TITLE__", page_title)
         .replace("__SITE_NAME__", site_name)
@@ -105,6 +107,15 @@ def _render_website_page(
         .replace("__LOGO__", logo_html)
         .replace("__ASK_URL__", ask_url)
         .replace("__LANG__", lang)
+        .replace("__QUESTION_LABEL__", ui["question_label"])
+        .replace("__PLACEHOLDER__", ui["placeholder"])
+        .replace("__SEND_ARIA_LABEL__", ui["send_aria_label"])
+        .replace("__SEND_TITLE__", ui["send_title"])
+        .replace("__ERROR_NO_ANSWER__", ui["error_no_answer"])
+        .replace("__ERROR_NETWORK__", ui["error_network"])
+        .replace("__FOOTER_ACCESSIBILITY__", ui["footer_accessibility"])
+        .replace("__FOOTER_PRIVACY__", ui["footer_privacy"])
+        .replace("__FOOTER_TERMS__", ui["footer_terms"])
     )
 
 
@@ -200,7 +211,8 @@ def hotel_web_page(
     logo_html = ""
     if row.logo_file:
         logo_src = html.escape(f"/hotel-assets/{hotel.hotel_id}/{row.logo_file}")
-        alt = html.escape(f"לוגו {display_name}")
+        logo_alt_prefix = UI_STRINGS.get(lang, UI_STRINGS[DEFAULT_LANGUAGE])["logo_alt_prefix"]
+        alt = html.escape(f"{logo_alt_prefix} {display_name}")
         logo_html = f'<img src="{logo_src}" alt="{alt}" class="site-logo">'
 
     bg_image_url = ""

@@ -81,21 +81,20 @@ def test_hotel_web_page_renders_with_row_values(client, db):
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "מלון לדוגמה" in response.text
-    assert "שאלו אותי כל דבר" in response.text
-    assert "<title>מלון לדוגמה - קונסיירז" in response.text
+    assert "Example Hotel" in response.text
+    assert "<title>Example Hotel - Concierge" in response.text
     assert "/chatbot/beachtown/demo/ask" in response.text
 
 
-def test_hotel_web_page_defaults_to_hebrew(client, db):
+def test_hotel_web_page_defaults_to_english(client, db):
     hotel = add_hotel(db, "hotel-example")
     add_web_page(db, hotel)
 
     response = client.get("/chatbot/beachtown/demo")
 
-    assert 'lang="he"' in response.text
-    assert "מלון לדוגמה" in response.text
-    assert "Example Hotel" not in response.text
+    assert 'lang="en"' in response.text
+    assert "Example Hotel" in response.text
+    assert "מלון לדוגמה" not in response.text
 
 
 def test_hotel_web_page_lang_en_shows_english(client, db):
@@ -110,6 +109,18 @@ def test_hotel_web_page_lang_en_shows_english(client, db):
     assert "מלון לדוגמה" not in response.text
 
 
+def test_hotel_web_page_lang_he_shows_hebrew(client, db):
+    hotel = add_hotel(db, "hotel-example")
+    add_web_page(db, hotel)
+
+    response = client.get("/chatbot/beachtown/demo?lang=he")
+
+    assert 'lang="he"' in response.text
+    assert "מלון לדוגמה" in response.text
+    assert "שאלו אותי כל דבר" in response.text
+    assert "Example Hotel" not in response.text
+
+
 def test_hotel_web_page_lang_en_falls_back_to_hebrew_for_missing_field(client, db):
     # The fixture's tagline only has an "he" entry — ?lang=en must still
     # show it (via pick_language's fallback) rather than erroring or
@@ -122,15 +133,15 @@ def test_hotel_web_page_lang_en_falls_back_to_hebrew_for_missing_field(client, d
     assert "שאלו אותי כל דבר" in response.text
 
 
-def test_hotel_web_page_unrecognized_lang_falls_back_to_hebrew(client, db):
+def test_hotel_web_page_unrecognized_lang_falls_back_to_english(client, db):
     hotel = add_hotel(db, "hotel-example")
     add_web_page(db, hotel)
 
     response = client.get("/chatbot/beachtown/demo?lang=fr")
 
     assert response.status_code == 200
-    assert 'lang="he"' in response.text
-    assert "מלון לדוגמה" in response.text
+    assert 'lang="en"' in response.text
+    assert "Example Hotel" in response.text
 
 
 def test_hotel_web_page_escapes_html_in_display_name(client, db):
