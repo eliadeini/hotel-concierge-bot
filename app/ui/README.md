@@ -9,7 +9,7 @@ neutralized for the public site without affecting the hotel demo — see
 `app/messaging/inbound.py::gather_context`):
 - **`GET /demo`** (`templates/demo.html`, `POST /demo/ask`) — the WhatsApp-lookalike look, for demoing to hotel clients, backed by `DEMO_HOTEL_ID` (`"hotel-demo"`). Always reachable at this fixed path.
 - **`GET /chatbot/nahariya`** (`templates/website.html`, `POST /chatbot/nahariya/ask`) — the general public site look ("נהרייני"), a plain reskin (no WhatsApp chrome) of the same chat mechanics, backed by its own separate tenant `NAHARIYA_GUIDE_HOTEL_ID` (`"nahariya-guide"`). Hardcoded on purpose — the first, fixed public site — not DB-driven like the generic pages below.
-- **`GET /chatbot/{location}/{slug}`** (`POST /chatbot/{location}/{slug}/ask`) — a **generic**, per-hotel branded page: any hotel in `hotel_settings` can get one, fully configured from data (see "Generic hotel pages" below), no code change needed per hotel.
+- **`GET /chatbot/{location}/{slug}`** (`POST /chatbot/{location}/{slug}/ask`) — a **generic**, per-hotel branded page: any hotel in `hotel_settings` can get one, fully configured from data (see "Generic hotel pages" below), no code change needed per hotel. Supports `?lang=he`/`?lang=en` (see below); any other value, or no param at all, falls back to Hebrew.
 - **`GET /`** redirects to the demo or the fixed nahariya page based on `settings.ui_mode` (`UIMode.website` → `/chatbot/nahariya`, `UIMode.hotel` → `/demo`; see `app/config.py`) — it only picks the default front door; every page above stays directly reachable either way.
 
 ## Layout
@@ -26,7 +26,11 @@ one-to-one with `HotelSettings`) plus gitignored image files.
 docs/commits — substitute your actual values when you run this for real):
 
 1. Register the hotel and its page together — `web_page` is optional on
-   `POST /admin/hotels`, so one call creates both:
+   `POST /admin/hotels`, so one call creates both. `display_name`/
+   `tagline`/`page_title` are each an object keyed by language
+   (`"he"`/`"en"`) rather than a plain string — `"he"` is required on
+   every one of the three, `"en"` is optional per field (missing it just
+   means `?lang=en` falls back to the Hebrew text for that field):
    ```bash
    curl -X POST http://127.0.0.1:8000/admin/hotels \
      -H "Content-Type: application/json" \
@@ -38,9 +42,9 @@ docs/commits — substitute your actual values when you run this for real):
        "web_page": {
          "location": "beachtown",
          "slug": "demo",
-         "display_name": "מלון לדוגמה",
-         "tagline": "שאלו אותי כל דבר על הביקור",
-         "page_title": "מלון לדוגמה — הקונסיירז' הדיגיטלי",
+         "display_name": {"he": "מלון לדוגמה", "en": "Example Hotel"},
+         "tagline": {"he": "שאלו אותי כל דבר על הביקור", "en": "Ask me anything about your stay"},
+         "page_title": {"he": "מלון לדוגמה — הקונסיירז הדיגיטלי", "en": "Example Hotel — Digital Concierge"},
          "logo_file": "logo.png",
          "background_file": "background.jpg"
        }
@@ -49,9 +53,12 @@ docs/commits — substitute your actual values when you run this for real):
    `location`/`slug` must be lowercase `a-z0-9-` (they form the URL);
    `logo_file`/`background_file` must be plain file names, no path. 404 for
    an unknown `hotel_id`, 409 if another hotel already owns that
-   `location`+`slug`, 422 for invalid input. To edit branding later without
-   resupplying `api_key`, use `PUT /admin/hotels/{hotel_id}/web-page` with
-   the same `location`/`slug`/`display_name`/`tagline`/`page_title`/
+   `location`+`slug`, 422 for invalid input — including a missing `"he"`
+   key or an unsupported language key (only `SUPPORTED_LANGUAGES` from
+   `app/models/hotel_web_page.py`, currently `{"he", "en"}`) on any of the
+   three fields. To edit branding later without resupplying `api_key`, use
+   `PUT /admin/hotels/{hotel_id}/web-page` with the same
+   `location`/`slug`/`display_name`/`tagline`/`page_title`/
    `logo_file`/`background_file`/`enabled` fields directly (not nested).
 2. Drop the actual image files locally at
    `app/ui/hotel_assets/hotel-example/logo.png` and `.../background.jpg`
@@ -59,8 +66,18 @@ docs/commits — substitute your actual values when you run this for real):
    convention, nothing to commit).
 3. Push them to the server: `deploy/sync-private-data.sh` (now also syncs
    `app/ui/hotel_assets/`, binary-safe — see that script's own comments).
-4. Visit `/chatbot/beachtown/demo`. Set `enabled: false` (same PUT
-   endpoint) to take a page down without deleting its data.
+4. Visit `/chatbot/beachtown/demo` (Hebrew, the default) or
+   `/chatbot/beachtown/demo?lang=en` (English). Set `enabled: false` (same
+   PUT endpoint) to take a page down without deleting its data.
+
+**Language switching**: the generic page's `<html lang="...">` and all
+three text fields follow `?lang=he`/`?lang=en` — any other value, or no
+param, falls back to Hebrew (`DEFAULT_LANGUAGE`). This only sets which
+text/language-attribute is shown; the template's CSS is RTL-authored
+regardless of language, so `?lang=en` does **not** flip the layout to
+LTR — a real English layout would need separate CSS, not done here. The
+fixed `/demo` and `/chatbot/nahariya` pages don't take this param at
+all — they're hardcoded to a single language exactly as before.
 
 A hotel with `is_test=True` (`HotelSettings.is_test`) never gets served
 here — same 404 as a missing or disabled page, so a prober can't tell

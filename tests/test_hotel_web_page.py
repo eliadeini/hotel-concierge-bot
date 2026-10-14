@@ -1,3 +1,5 @@
+import json
+
 from app.models.conversation_log import ConversationLog
 from app.models.hotel_region_tag import HotelRegionTag
 from app.models.hotel_settings import AIEngineType, HotelSettings, PresentationMode
@@ -26,13 +28,19 @@ def add_hotel(db, hotel_id, tags=(), presentation_mode=PresentationMode.website,
 
 
 def add_web_page(db, hotel, **overrides):
+    # display_name/tagline/page_title are stored as JSON — see
+    # HotelWebPage.pick_language — so direct-DB-insert tests must encode
+    # them the same way the admin endpoint would.
     defaults = dict(
         hotel_settings_id=hotel.id,
         location="beachtown",
         slug="demo",
-        display_name="מלון לדוגמה",
-        tagline="שאלו אותי כל דבר",
-        page_title="מלון לדוגמה - קונסיירז'",
+        display_name=json.dumps({"he": "מלון לדוגמה", "en": "Example Hotel"}, ensure_ascii=False),
+        tagline=json.dumps({"he": "שאלו אותי כל דבר"}, ensure_ascii=False),
+        page_title=json.dumps(
+            {"he": "מלון לדוגמה - קונסיירז'", "en": "Example Hotel - Concierge"},
+            ensure_ascii=False,
+        ),
         logo_file=None,
         background_file=None,
         enabled=True,
@@ -48,9 +56,9 @@ def web_page_payload(**overrides):
     payload = {
         "location": "beachtown",
         "slug": "demo",
-        "display_name": "מלון לדוגמה",
-        "tagline": "תג עדכני",
-        "page_title": "עמוד בדיקה",
+        "display_name": {"he": "מלון לדוגמה", "en": "Example Hotel"},
+        "tagline": {"he": "תג עדכני", "en": "Updated tagline"},
+        "page_title": {"he": "עמוד בדיקה", "en": "Test Page"},
     }
     payload.update(overrides)
     return payload
@@ -79,9 +87,61 @@ def test_hotel_web_page_renders_with_row_values(client, db):
     assert "/chatbot/beachtown/demo/ask" in response.text
 
 
+def test_hotel_web_page_defaults_to_hebrew(client, db):
+    hotel = add_hotel(db, "hotel-example")
+    add_web_page(db, hotel)
+
+    response = client.get("/chatbot/beachtown/demo")
+
+    assert 'lang="he"' in response.text
+    assert "מלון לדוגמה" in response.text
+    assert "Example Hotel" not in response.text
+
+
+def test_hotel_web_page_lang_en_shows_english(client, db):
+    hotel = add_hotel(db, "hotel-example")
+    add_web_page(db, hotel)
+
+    response = client.get("/chatbot/beachtown/demo?lang=en")
+
+    assert 'lang="en"' in response.text
+    assert "Example Hotel" in response.text
+    assert "Example Hotel - Concierge" in response.text
+    assert "מלון לדוגמה" not in response.text
+
+
+def test_hotel_web_page_lang_en_falls_back_to_hebrew_for_missing_field(client, db):
+    # The fixture's tagline only has an "he" entry — ?lang=en must still
+    # show it (via pick_language's fallback) rather than erroring or
+    # showing nothing.
+    hotel = add_hotel(db, "hotel-example")
+    add_web_page(db, hotel)
+
+    response = client.get("/chatbot/beachtown/demo?lang=en")
+
+    assert "שאלו אותי כל דבר" in response.text
+
+
+def test_hotel_web_page_unrecognized_lang_falls_back_to_hebrew(client, db):
+    hotel = add_hotel(db, "hotel-example")
+    add_web_page(db, hotel)
+
+    response = client.get("/chatbot/beachtown/demo?lang=fr")
+
+    assert response.status_code == 200
+    assert 'lang="he"' in response.text
+    assert "מלון לדוגמה" in response.text
+
+
 def test_hotel_web_page_escapes_html_in_display_name(client, db):
     hotel = add_hotel(db, "hotel-example")
-    add_web_page(db, hotel, display_name='<script>alert(1)</script> & "co"')
+    add_web_page(
+        db,
+        hotel,
+        display_name=json.dumps(
+            {"he": '<script>alert(1)</script> & "co"'}, ensure_ascii=False
+        ),
+    )
 
     response = client.get("/chatbot/beachtown/demo")
 
@@ -208,9 +268,10 @@ def test_admin_create_hotel_with_web_page(client, db):
     assert response.status_code == 200
     body = response.json()
     assert body["web_page"]["url"] == "/chatbot/beachtown/demo"
+    assert body["web_page"]["display_name"] == {"he": "מלון לדוגמה", "en": "Example Hotel"}
 
     row = db.query(HotelWebPage).filter_by(location="beachtown", slug="demo").one()
-    assert row.display_name == "מלון לדוגמה"
+    assert json.loads(row.display_name) == {"he": "מלון לדוגמה", "en": "Example Hotel"}
 
 
 def test_admin_create_hotel_without_web_page_omits_it(client):
@@ -263,15 +324,15 @@ def test_admin_web_page_updates_in_place(client, db):
 
     response = client.put(
         "/admin/hotels/hotel-example/web-page",
-        json=web_page_payload(display_name="שם חדש"),
+        json=web_page_payload(display_name={"he": "שם חדש"}),
         headers=HEADERS,
     )
 
     assert response.status_code == 200
-    assert response.json()["display_name"] == "שם חדש"
+    assert response.json()["display_name"] == {"he": "שם חדש"}
     rows = db.query(HotelWebPage).filter_by(hotel_settings_id=hotel.id).all()
     assert len(rows) == 1  # updated in place, not duplicated
-    assert rows[0].display_name == "שם חדש"
+    assert json.loads(rows[0].display_name) == {"he": "שם חדש"}
 
 
 def test_admin_web_page_conflict_with_other_hotel_returns_409(client, db):
@@ -296,7 +357,7 @@ def test_admin_web_page_same_hotel_reusing_its_own_path_not_a_conflict(client, d
 
     response = client.put(
         "/admin/hotels/hotel-example/web-page",
-        json=web_page_payload(display_name="עדכון"),
+        json=web_page_payload(display_name={"he": "עדכון"}),
         headers=HEADERS,
     )
 
@@ -341,3 +402,36 @@ def test_admin_web_page_background_filename_with_slash_rejected(client, db):
         headers=HEADERS,
     )
     assert response.status_code == 422
+
+
+def test_admin_web_page_missing_hebrew_rejected(client, db):
+    add_hotel(db, "hotel-example")
+    response = client.put(
+        "/admin/hotels/hotel-example/web-page",
+        json=web_page_payload(display_name={"en": "English only"}),
+        headers=HEADERS,
+    )
+    assert response.status_code == 422
+
+
+def test_admin_web_page_unsupported_language_key_rejected(client, db):
+    add_hotel(db, "hotel-example")
+    response = client.put(
+        "/admin/hotels/hotel-example/web-page",
+        json=web_page_payload(tagline={"he": "שלום", "fr": "Bonjour"}),
+        headers=HEADERS,
+    )
+    assert response.status_code == 422
+
+
+def test_admin_web_page_english_only_field_is_allowed(client, db):
+    # "en" is optional per-field as long as "he" is present somewhere in
+    # the payload — a field with only "he" (no "en" at all) is valid.
+    add_hotel(db, "hotel-example")
+    response = client.put(
+        "/admin/hotels/hotel-example/web-page",
+        json=web_page_payload(tagline={"he": "רק עברית"}),
+        headers=HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json()["tagline"] == {"he": "רק עברית"}

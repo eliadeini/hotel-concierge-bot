@@ -21,7 +21,7 @@ from app.db import get_db
 from app.engines import factory as engine_factory
 from app.messaging.inbound import gather_context
 from app.models.hotel_settings import HotelSettings
-from app.models.hotel_web_page import HotelWebPage
+from app.models.hotel_web_page import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, HotelWebPage, pick_language
 from app.models.user_note import UserNoteSentiment
 from app.user_notes import submit_user_note
 
@@ -80,6 +80,7 @@ def _render_website_page(
     bg_image_url: str,
     logo_html: str,
     ask_url: str,
+    lang: str = DEFAULT_LANGUAGE,
 ) -> str:
     """Fills _WEBSITE_TEMPLATE's __TOKEN__ placeholders via str.replace —
     not str.format, since the CSS is full of literal braces that would
@@ -89,6 +90,12 @@ def _render_website_page(
     the database before passing it in here — this function does no
     escaping itself, since the fixed nahariya/demo-style callers pass
     their own literal (not DB-sourced) strings unescaped on purpose.
+
+    `lang` only sets the <html lang="..."> attribute (correct for
+    accessibility/screen readers) — it does NOT flip the page's layout
+    direction. The template's CSS is written assuming Hebrew/RTL
+    regardless of which language is actually shown; a genuinely correct
+    LTR layout for English is a separate, not-yet-done task.
     """
     return (
         _WEBSITE_TEMPLATE.replace("__PAGE_TITLE__", page_title)
@@ -97,6 +104,7 @@ def _render_website_page(
         .replace("__BG_IMAGE_URL__", bg_image_url)
         .replace("__LOGO__", logo_html)
         .replace("__ASK_URL__", ask_url)
+        .replace("__LANG__", lang)
     )
 
 
@@ -157,17 +165,29 @@ def nahariya_chatbot_page() -> str:
         bg_image_url="/static/Nahariya-bg.jpg",
         logo_html="",
         ask_url="/chatbot/nahariya/ask",
+        lang="he",
     )
 
 
 @router.get("/chatbot/{location}/{slug}", response_class=HTMLResponse)
-def hotel_web_page(location: str, slug: str, db: Session = Depends(get_db)) -> str:
+def hotel_web_page(
+    location: str, slug: str, lang: str = DEFAULT_LANGUAGE, db: Session = Depends(get_db)
+) -> str:
     """Generic, DB-configured hotel page — see HotelWebPage. Registered
     after the fixed /chatbot/nahariya route above; no actual path-collision
     risk either way (that route is 1 segment, this one requires 2), but
     kept in this order regardless. 404 is identical whether the page is
     missing, disabled, or belongs to a test hotel — never distinguishes, so
-    a prober can't tell "never existed" apart from "exists but disabled"."""
+    a prober can't tell "never existed" apart from "exists but disabled".
+
+    ?lang=he/en picks which language's text to show (see
+    HotelWebPage.pick_language) — an unrecognized/missing value silently
+    falls back to DEFAULT_LANGUAGE rather than erroring, since this is a
+    cosmetic query param on a public page, not something worth 4xx-ing a
+    guest over."""
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = DEFAULT_LANGUAGE
+
     row = db.query(HotelWebPage).filter_by(location=location, slug=slug).one_or_none()
     if row is None or not row.enabled:
         raise HTTPException(status_code=404, detail="Unknown hotel page")
@@ -175,10 +195,12 @@ def hotel_web_page(location: str, slug: str, db: Session = Depends(get_db)) -> s
     if hotel is None or hotel.is_test:
         raise HTTPException(status_code=404, detail="Unknown hotel page")
 
+    display_name = pick_language(row.display_name, lang)
+
     logo_html = ""
     if row.logo_file:
         logo_src = html.escape(f"/hotel-assets/{hotel.hotel_id}/{row.logo_file}")
-        alt = html.escape(f"לוגו {row.display_name}")
+        alt = html.escape(f"לוגו {display_name}")
         logo_html = f'<img src="{logo_src}" alt="{alt}" class="site-logo">'
 
     bg_image_url = ""
@@ -186,12 +208,13 @@ def hotel_web_page(location: str, slug: str, db: Session = Depends(get_db)) -> s
         bg_image_url = html.escape(f"/hotel-assets/{hotel.hotel_id}/{row.background_file}")
 
     return _render_website_page(
-        page_title=html.escape(row.page_title),
-        site_name=html.escape(row.display_name),
-        tagline=html.escape(row.tagline),
+        page_title=html.escape(pick_language(row.page_title, lang)),
+        site_name=html.escape(display_name),
+        tagline=html.escape(pick_language(row.tagline, lang)),
         bg_image_url=bg_image_url,
         logo_html=logo_html,
         ask_url=f"/chatbot/{location}/{slug}/ask",
+        lang=lang,
     )
 
 
