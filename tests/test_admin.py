@@ -1,3 +1,4 @@
+from app.engines import factory
 from app.models.hotel_settings import AIEngineType, HotelSettings
 from app.security.crypto import decrypt_key
 
@@ -57,3 +58,56 @@ def test_missing_token_rejected(client):
         json={"hotel_id": "h", "ai_engine": "openai", "api_key": "k"},
     )
     assert response.status_code == 401
+
+
+def test_create_hotel_without_api_key_stores_no_key(client, db):
+    response = client.post(
+        "/admin/hotels",
+        json={"hotel_id": "no-key-hotel", "ai_engine": "openai"},
+        headers=HEADERS,
+    )
+    assert response.status_code == 200
+    row = db.query(HotelSettings).filter_by(hotel_id="no-key-hotel").one()
+    assert row.api_key_encrypted is None
+
+
+def test_get_engine_falls_back_to_default_hotel_key_when_hotel_has_none(client, db):
+    client.post(
+        "/admin/hotels",
+        json={
+            "hotel_id": factory.DEFAULT_API_KEY_HOTEL_ID,
+            "ai_engine": "openai",
+            "api_key": "default-key",
+        },
+        headers=HEADERS,
+    )
+    client.post(
+        "/admin/hotels",
+        json={"hotel_id": "no-key-hotel", "ai_engine": "openai"},
+        headers=HEADERS,
+    )
+
+    engine = factory.get_engine("no-key-hotel", db)
+
+    assert engine._client.api_key == "default-key"
+
+
+def test_get_engine_uses_own_key_over_default(client, db):
+    client.post(
+        "/admin/hotels",
+        json={
+            "hotel_id": factory.DEFAULT_API_KEY_HOTEL_ID,
+            "ai_engine": "openai",
+            "api_key": "default-key",
+        },
+        headers=HEADERS,
+    )
+    client.post(
+        "/admin/hotels",
+        json={"hotel_id": "own-key-hotel", "ai_engine": "openai", "api_key": "own-key"},
+        headers=HEADERS,
+    )
+
+    engine = factory.get_engine("own-key-hotel", db)
+
+    assert engine._client.api_key == "own-key"

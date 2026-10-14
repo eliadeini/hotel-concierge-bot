@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
@@ -5,9 +6,27 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
+# Only these two for now — adding a third language later means extending
+# this set, the admin validator in app/api/chat.py, and (for a genuinely
+# correct rendering, not just translated text) the template's RTL-authored
+# CSS, which currently assumes Hebrew/RTL regardless of which language is
+# actually shown. See app/ui/README.md.
+SUPPORTED_LANGUAGES = {"he", "en"}
+DEFAULT_LANGUAGE = "en"
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def pick_language(localized_json: str, lang: str) -> str:
+    """Parses a {"he": "...", "en": "..."} JSON string (as stored in
+    display_name/tagline/page_title below) and returns the requested
+    language's text, falling back to Hebrew if that language wasn't
+    provided for this particular field (he is always required — see
+    app/api/chat.py's admin validation — so this fallback can never miss)."""
+    data = json.loads(localized_json)
+    return data.get(lang) or data["he"]
 
 
 class HotelWebPage(Base):
@@ -33,9 +52,15 @@ class HotelWebPage(Base):
     location: Mapped[str] = mapped_column(String(64))
     slug: Mapped[str] = mapped_column(String(64))
 
-    display_name: Mapped[str] = mapped_column(String(128))
-    tagline: Mapped[str] = mapped_column(String(512))
-    page_title: Mapped[str] = mapped_column(String(128))
+    # Each of these three stores a JSON object, e.g. {"he": "...", "en":
+    # "..."} — not plain text. "he" is always required (enforced by the
+    # admin request validation in app/api/chat.py, not by the DB); "en" is
+    # optional, missing it just means pick_language() falls back to "he"
+    # for that field when ?lang=en is requested. Parse with pick_language(),
+    # never read these columns directly.
+    display_name: Mapped[str] = mapped_column(String(256))
+    tagline: Mapped[str] = mapped_column(String(1024))
+    page_title: Mapped[str] = mapped_column(String(256))
 
     # Plain file names only (no path), resolved at render time to
     # /hotel-assets/<hotel_id>/<file> — see app/ui/hotel_assets/README.md.

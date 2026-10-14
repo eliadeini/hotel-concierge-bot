@@ -64,6 +64,11 @@ curl -X POST http://127.0.0.1:8000/admin/hotels `
   -d '{"hotel_id": "hotel-test-prague", "ai_engine": "openai", "api_key": "sk-...", "is_test": true}'
 ```
 
+`api_key` can be omitted — the hotel then falls back to whichever key backs
+the public nahariya website (`DEFAULT_API_KEY_HOTEL_ID` in
+`app/engines/factory.py`), so a new hotel doesn't need its own key/billing
+account to start answering questions.
+
 Chat:
 
 ```powershell

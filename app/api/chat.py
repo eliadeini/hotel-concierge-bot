@@ -1,10 +1,11 @@
+import json
 import logging
 import re
 import secrets
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -21,7 +22,7 @@ from app.messaging.templates import DEFAULT_GREETING
 from app.models.conversation_log import ConversationLog
 from app.models.guest_session import GuestFlowState, GuestSession
 from app.models.hotel_settings import AIEngineType, HotelSettings, PresentationMode
-from app.models.hotel_web_page import HotelWebPage
+from app.models.hotel_web_page import SUPPORTED_LANGUAGES, HotelWebPage
 from app.models.user_note import UserNote, UserNoteStatus
 from app.prompts import build_system_prompt
 from app.security.crypto import encrypt_key
@@ -153,18 +154,36 @@ _FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 class HotelWebPageData(BaseModel):
     location: str = Field(min_length=1, max_length=64)
     slug: str = Field(min_length=1, max_length=64)
-    display_name: str = Field(min_length=1, max_length=128)
-    tagline: str = Field(min_length=1, max_length=512)
-    page_title: str = Field(min_length=1, max_length=128)
+    # Each a map of language code -> text, e.g. {"he": "...", "en": "..."}
+    # — "he" is required (checked below), "en" is optional; a hotel with no
+    # "en" entry just always shows Hebrew for that field, even if
+    # ?lang=en is requested (see HotelWebPage.pick_language). Only "he"/
+    # "en" keys are accepted for now — see SUPPORTED_LANGUAGES.
+    display_name: dict[str, str]
+    tagline: dict[str, str]
+    page_title: dict[str, str]
     logo_file: str | None = None
     background_file: str | None = None
     enabled: bool = True
+
+    @field_validator("display_name", "tagline", "page_title")
+    @classmethod
+    def _require_hebrew_and_known_languages(cls, value: dict[str, str]) -> dict[str, str]:
+        if not value.get("he"):
+            raise ValueError("must include a non-empty 'he' value")
+        unknown = set(value) - SUPPORTED_LANGUAGES
+        if unknown:
+            raise ValueError(f"unsupported language key(s): {sorted(unknown)}")
+        return value
 
 
 class HotelUpsertRequest(BaseModel):
     hotel_id: str = Field(min_length=1, max_length=64)
     ai_engine: AIEngineType
-    api_key: str = Field(min_length=1)
+    # Optional — omit to fall back to the key that backs the public
+    # nahariya website (see DEFAULT_API_KEY_HOTEL_ID in
+    # app/engines/factory.py) instead of supplying this hotel's own.
+    api_key: str | None = None
     is_test: bool = False
     hotel_skill_path: str | None = None
     # Optional — when provided, the hotel's browser chat page (see
@@ -208,9 +227,10 @@ def _upsert_web_page(db: Session, hotel: HotelSettings, data: HotelWebPageData) 
         db.add(row)
     row.location = data.location
     row.slug = data.slug
-    row.display_name = data.display_name
-    row.tagline = data.tagline
-    row.page_title = data.page_title
+    # Stored as JSON — see HotelWebPage's field docstrings and pick_language().
+    row.display_name = json.dumps(data.display_name, ensure_ascii=False)
+    row.tagline = json.dumps(data.tagline, ensure_ascii=False)
+    row.page_title = json.dumps(data.page_title, ensure_ascii=False)
     row.logo_file = data.logo_file
     row.background_file = data.background_file
     row.enabled = data.enabled
@@ -218,9 +238,11 @@ def _upsert_web_page(db: Session, hotel: HotelSettings, data: HotelWebPageData) 
     return {
         "location": row.location,
         "slug": row.slug,
-        "display_name": row.display_name,
-        "tagline": row.tagline,
-        "page_title": row.page_title,
+        # Parsed back out of JSON for the response, so API consumers get
+        # structured data, not a string they'd have to parse themselves.
+        "display_name": json.loads(row.display_name),
+        "tagline": json.loads(row.tagline),
+        "page_title": json.loads(row.page_title),
         "logo_file": row.logo_file,
         "background_file": row.background_file,
         "enabled": row.enabled,
@@ -248,7 +270,7 @@ def upsert_hotel(
         row = HotelSettings(hotel_id=req.hotel_id)
         db.add(row)
     row.ai_engine = req.ai_engine
-    row.api_key_encrypted = encrypt_key(req.api_key)
+    row.api_key_encrypted = encrypt_key(req.api_key) if req.api_key else None
     row.is_test = req.is_test
     row.hotel_skill_path = req.hotel_skill_path
     # Populates row.id for a brand-new hotel, needed below for the

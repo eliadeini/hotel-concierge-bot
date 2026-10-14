@@ -40,7 +40,10 @@ class HotelSettings(Base):
     ai_engine: Mapped[AIEngineType] = mapped_column(
         Enum(AIEngineType, values_callable=lambda e: [m.value for m in e])
     )
-    api_key_encrypted: Mapped[str] = mapped_column(Text)
+    # None means this hotel has no key of its own — app/engines/factory.py
+    # ::get_engine() falls back to DEFAULT_API_KEY_HOTEL_ID's key instead
+    # (see HotelUpsertRequest.api_key in app/api/chat.py, optional there too).
+    api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Test hotels (e.g. the prague manual-test region) must never be exposed
     # to real end users.
     is_test: Mapped[bool] = mapped_column(Boolean, default=False)
