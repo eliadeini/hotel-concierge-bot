@@ -11,6 +11,7 @@ neutralized for the public site without affecting the hotel demo — see
 - **`GET /chatbot/nahariya`** (`templates/website.html`, `POST /chatbot/nahariya/ask`) — the general public site look ("נהרייני"), a plain reskin (no WhatsApp chrome) of the same chat mechanics, backed by its own separate tenant `NAHARIYA_GUIDE_HOTEL_ID` (`"nahariya-guide"`). Hardcoded on purpose — the first, fixed public site — not DB-driven like the generic pages below.
 - **`GET /chatbot/{location}/{slug}`** (`POST /chatbot/{location}/{slug}/ask`) — a **generic**, per-hotel branded page: any hotel in `hotel_settings` can get one, fully configured from data (see "Generic hotel pages" below), no code change needed per hotel. Supports `?lang=he`/`?lang=en` (see below); any other value, or no param at all, falls back to English.
 - **`GET /`** redirects to the demo or the fixed nahariya page based on `settings.ui_mode` (`UIMode.website` → `/chatbot/nahariya`, `UIMode.hotel` → `/demo`; see `app/config.py`) — it only picks the default front door; every page above stays directly reachable either way.
+- **`GET /about`** — a personal, site-wide page about the developer/project, not tied to any hotel's data (see "About page" below). Linked via a small button from `/demo` and `/chatbot/nahariya` only.
 
 ## Layout
 - **`routes.py`** — `demo_page()`/`nahariya_chatbot_page()`/`hotel_web_page()` each serve HTML; `index_page()` is the `settings.ui_mode`-driven redirect. `demo.html` is served as-is (cached raw string, read once at import). `website.html` is instead a **template** with `__TOKEN__` placeholders (`_WEBSITE_TEMPLATE`, also read once at import) — `_render_website_page(...)` fills it via plain `str.replace()` calls (not `str.format()`, since the CSS is full of literal `{}`). Both `nahariya_chatbot_page()` (hardcoded literal values) and `hotel_web_page()` (DB-sourced, `html.escape()`'d — see below) call the same renderer, so there's exactly one template to keep in sync, not two. The shared `_ask()` helper returns `{"text": str, "found_in_kb": bool, "conversation_id": int}` (reuses `app.api.chat.ChatResponse` directly, so the "never leak `raw_provider_response`" guarantee can't drift). `POST /notes` (shared by every page, not tenant-scoped — `conversation_id` already identifies the hotel) accepts a guest's like/dislike and/or free-text note against a specific `conversation_id` — see "Guest notes" below.
@@ -84,6 +85,37 @@ hardcoded to Hebrew exactly as before.
 A hotel with `is_test=True` (`HotelSettings.is_test`) never gets served
 here — same 404 as a missing or disabled page, so a prober can't tell
 those three cases apart from the outside.
+
+**Clickable logo**: if `HotelWebPage.website_url` is set (must start with
+`http://`/`https://`, enforced in `app/api/chat.py`), the page's logo
+links out to that hotel's own real-world site in a new tab. With no
+`website_url`, the logo stays a plain, non-clickable image — unchanged
+from before this field existed. This is the same header slot that
+`/demo`/`/chatbot/nahariya` use for the About button below — a generic
+hotel page gets one or the other, never both.
+
+## About page
+`GET /about?lang=he|en` (`templates/about.html`, same `?lang=` convention
+as the generic hotel pages, defaulting to English) is a standalone,
+bilingual page about the developer/project — a stable, linkable URL (e.g.
+for a CV), deliberately not tied to any hotel's data. Content comes from
+`ABOUT_STRINGS` in `app/ui/strings.py` (`heading`/`bio_html`/etc., per
+language) — edit that dict to change the page's text, no template/route
+change needed.
+
+The photo is served from a new, entirely gitignored `app/ui/private_assets/`
+directory (flat, not per-hotel, unlike `app/ui/hotel_assets/`) via a
+dedicated `/private-assets` static mount in `app/main.py` — "private" here
+means "not committed to git", not "access-controlled"; like `/hotel-assets`,
+anyone with the URL can fetch the file. Drop the photo locally at
+`app/ui/private_assets/about-photo.<ext>` and push it to the server with
+`deploy/sync-private-data.sh` (now also syncs this directory).
+
+The About button linking here appears only on `/demo` and
+`/chatbot/nahariya`'s headers (`_render_website_page`'s
+`about_button_html` param) — **never** on generic hotel pages, which use
+that same header slot for the hotel's own clickable logo instead (see
+"Generic hotel pages" above).
 
 ## Guest notes
 Each bot reply gets a 👍/👎 pair (fires immediately, no text required) and a

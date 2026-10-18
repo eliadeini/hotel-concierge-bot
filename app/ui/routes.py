@@ -23,7 +23,7 @@ from app.messaging.inbound import gather_context
 from app.models.hotel_settings import HotelSettings
 from app.models.hotel_web_page import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, HotelWebPage, pick_language
 from app.models.user_note import UserNoteSentiment
-from app.ui.strings import UI_STRINGS
+from app.ui.strings import ABOUT_STRINGS, UI_STRINGS
 from app.user_notes import submit_user_note
 
 router = APIRouter()
@@ -56,6 +56,13 @@ _PRIVACY_HTML = (Path(__file__).parent / "templates" / "privacy.html").read_text
 
 _TERMS_HTML = (Path(__file__).parent / "templates" / "terms.html").read_text(encoding="utf-8")
 
+# Raw template with __TOKEN__ placeholders — see _render_about_page below.
+_ABOUT_TEMPLATE = (Path(__file__).parent / "templates" / "about.html").read_text(encoding="utf-8")
+
+# Served from the gitignored /private-assets mount (app/main.py), not
+# /static — see app/ui/README.md's "About page" section for why.
+_ABOUT_PHOTO_URL = "/private-assets/about-photo.jpeg"
+
 
 class DemoAskRequest(BaseModel):
     question: str = Field(min_length=1)
@@ -82,6 +89,7 @@ def _render_website_page(
     logo_html: str,
     ask_url: str,
     lang: str = DEFAULT_LANGUAGE,
+    about_button_html: str = "",
 ) -> str:
     """Fills _WEBSITE_TEMPLATE's __TOKEN__ placeholders via str.replace —
     not str.format, since the CSS is full of literal braces that would
@@ -97,6 +105,12 @@ def _render_website_page(
     input placeholder, error messages, and footer links — it does not
     otherwise change the page's layout; there's no RTL/LTR-specific CSS in
     this template to flip either way.
+
+    `about_button_html` is opaque pre-built HTML (same pattern as
+    logo_html), empty by default — only nahariya_chatbot_page() passes a
+    real one. Generic hotel pages (hotel_web_page()) deliberately leave
+    this empty: that header slot is used for the hotel's own
+    website-link-wrapped logo instead (see HotelWebPage.website_url).
     """
     ui = UI_STRINGS.get(lang, UI_STRINGS[DEFAULT_LANGUAGE])
     return (
@@ -107,6 +121,7 @@ def _render_website_page(
         .replace("__LOGO__", logo_html)
         .replace("__ASK_URL__", ask_url)
         .replace("__LANG__", lang)
+        .replace("__ABOUT_BUTTON__", about_button_html)
         .replace("__QUESTION_LABEL__", ui["question_label"])
         .replace("__PLACEHOLDER__", ui["placeholder"])
         .replace("__SEND_ARIA_LABEL__", ui["send_aria_label"])
@@ -165,7 +180,10 @@ def nahariya_chatbot_page() -> str:
     other locations can get their own page later (/chatbot/eilat, etc.)
     without reshuffling this one's URL. Fixed/hardcoded values here (not
     DB-sourced, so not html.escape()'d) — must keep rendering byte-for-byte
-    what this page looked like before /chatbot/{location}/{slug} existed."""
+    what this page looked like before /chatbot/{location}/{slug} existed,
+    aside from the new About button (see _render_website_page's
+    about_button_html docs)."""
+    about_label = UI_STRINGS["he"]["about_button"]
     return _render_website_page(
         page_title="נהרייני - מדריך נהרייני מקומי",
         site_name="נהרייני",
@@ -177,6 +195,7 @@ def nahariya_chatbot_page() -> str:
         logo_html="",
         ask_url="/chatbot/nahariya/ask",
         lang="he",
+        about_button_html=f'<a href="/about?lang=he" class="about-button">{about_label}</a>',
     )
 
 
@@ -214,6 +233,9 @@ def hotel_web_page(
         logo_alt_prefix = UI_STRINGS.get(lang, UI_STRINGS[DEFAULT_LANGUAGE])["logo_alt_prefix"]
         alt = html.escape(f"{logo_alt_prefix} {display_name}")
         logo_html = f'<img src="{logo_src}" alt="{alt}" class="site-logo">'
+        if row.website_url:
+            href = html.escape(row.website_url)
+            logo_html = f'<a href="{href}" target="_blank" rel="noopener noreferrer">{logo_html}</a>'
 
     bg_image_url = ""
     if row.background_file:
@@ -253,6 +275,39 @@ def terms_page() -> str:
     accuracy disclaimer, and no-liability-for-recommended-businesses clause
     — linked from the footer of both /demo and /chatbot/nahariya."""
     return _TERMS_HTML
+
+
+def _render_about_page(lang: str) -> str:
+    """Fills _ABOUT_TEMPLATE's __TOKEN__ placeholders — same str.replace()
+    pattern as _render_website_page. Content comes from ABOUT_STRINGS
+    (app/ui/strings.py); the photo is a literal constant, not DB-sourced,
+    so nothing here needs html.escape()."""
+    content = ABOUT_STRINGS.get(lang, ABOUT_STRINGS[DEFAULT_LANGUAGE])
+    return (
+        _ABOUT_TEMPLATE.replace("__LANG__", lang)
+        .replace("__PAGE_TITLE__", content["page_title"])
+        .replace("__PHOTO_URL__", _ABOUT_PHOTO_URL)
+        .replace("__PHOTO_ALT__", content["photo_alt"])
+        .replace("__HEADING__", content["heading"])
+        .replace("__BIO_HTML__", content["bio_html"])
+        .replace("__BACK_LINK_TEXT__", content["back_link_text"])
+    )
+
+
+@router.get("/about", response_class=HTMLResponse)
+def about_page(lang: str = DEFAULT_LANGUAGE) -> str:
+    """A personal page about the site's developer/the project — not tied to
+    any hotel's data. Meant as a stable, linkable URL (e.g. for a CV), so
+    its path/behavior should stay simple and not grow DB-dependent.
+    ?lang=he/en picks the language, same convention and same silent
+    fallback-to-default as hotel_web_page(). Linked from a small button in
+    /demo's and /chatbot/nahariya's header — deliberately NOT linked from
+    generic hotel pages (/chatbot/{location}/{slug}), which use that same
+    header slot for a link to the hotel's own website instead (see
+    HotelWebPage.website_url / hotel_web_page() above)."""
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = DEFAULT_LANGUAGE
+    return _render_about_page(lang)
 
 
 @router.get("/", include_in_schema=False)

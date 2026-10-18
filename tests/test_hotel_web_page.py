@@ -185,6 +185,41 @@ def test_hotel_web_page_no_logo_renders_empty_slot(client, db):
     assert "<img" not in response.text
 
 
+def test_hotel_web_page_logo_links_to_website_url_when_set(client, db):
+    hotel = add_hotel(db, "hotel-example")
+    add_web_page(
+        db, hotel, logo_file="logo.png", website_url="https://example-hotel.test/"
+    )
+
+    response = client.get("/chatbot/beachtown/demo")
+
+    assert response.status_code == 200
+    assert '<a href="https://example-hotel.test/"' in response.text
+    assert "<img" in response.text
+
+
+def test_hotel_web_page_logo_not_linked_when_website_url_absent(client, db):
+    hotel = add_hotel(db, "hotel-example")
+    add_web_page(db, hotel, logo_file="logo.png")
+
+    response = client.get("/chatbot/beachtown/demo")
+
+    # target="_blank" only ever appears on the website_url-wrapping anchor
+    # (see hotel_web_page()'s logo_html build) — its absence confirms the
+    # logo stayed a plain, unwrapped <img>.
+    assert 'target="_blank"' not in response.text
+    assert "<img" in response.text
+
+
+def test_hotel_web_page_never_shows_about_button(client, db):
+    hotel = add_hotel(db, "hotel-example")
+    add_web_page(db, hotel)
+
+    response = client.get("/chatbot/beachtown/demo")
+
+    assert "/about" not in response.text
+
+
 def test_hotel_web_page_unknown_location_slug_returns_404(client):
     response = client.get("/chatbot/nowhere/nothing")
     assert response.status_code == 404
@@ -446,3 +481,36 @@ def test_admin_web_page_english_only_field_is_allowed(client, db):
     )
     assert response.status_code == 200
     assert response.json()["tagline"] == {"he": "רק עברית"}
+
+
+def test_admin_web_page_website_url_round_trips(client, db):
+    add_hotel(db, "hotel-example")
+    response = client.put(
+        "/admin/hotels/hotel-example/web-page",
+        json=web_page_payload(website_url="https://example-hotel.test/"),
+        headers=HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json()["website_url"] == "https://example-hotel.test/"
+
+    row = db.query(HotelWebPage).filter_by(location="beachtown", slug="demo").one()
+    assert row.website_url == "https://example-hotel.test/"
+
+
+def test_admin_web_page_website_url_omitted_stays_none(client, db):
+    add_hotel(db, "hotel-example")
+    response = client.put(
+        "/admin/hotels/hotel-example/web-page", json=web_page_payload(), headers=HEADERS
+    )
+    assert response.status_code == 200
+    assert response.json()["website_url"] is None
+
+
+def test_admin_web_page_website_url_without_scheme_rejected(client, db):
+    add_hotel(db, "hotel-example")
+    response = client.put(
+        "/admin/hotels/hotel-example/web-page",
+        json=web_page_payload(website_url="example-hotel.test"),
+        headers=HEADERS,
+    )
+    assert response.status_code == 422

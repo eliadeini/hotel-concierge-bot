@@ -1,10 +1,13 @@
-"""Chrome text for app/ui/templates/website.html, keyed by language.
+"""Chrome/content text for app/ui/templates/website.html and about.html,
+keyed by language.
 
 Not hotel-specific content — that's HotelWebPage's display_name/tagline/
-page_title (app/models/hotel_web_page.py). This is the shared UI copy
-around it: the input placeholder, accessibility label, send button, error
-messages, footer links, and the logo alt-text prefix. Consumed by
-_render_website_page() in app/ui/routes.py.
+page_title (app/models/hotel_web_page.py). UI_STRINGS is the shared UI copy
+around website.html: the input placeholder, accessibility label, send
+button, error messages, footer links, logo alt-text prefix, and the About
+button's own label. Consumed by _render_website_page() in
+app/ui/routes.py. ABOUT_STRINGS is the /about page's own content, consumed
+by _render_about_page() in the same file.
 """
 
 UI_STRINGS: dict[str, dict[str, str]] = {
@@ -19,6 +22,7 @@ UI_STRINGS: dict[str, dict[str, str]] = {
         "footer_privacy": "מדיניות פרטיות",
         "footer_terms": "תנאי שימוש",
         "logo_alt_prefix": "לוגו",
+        "about_button": "אודות",
     },
     "en": {
         "question_label": "Question for the chatbot",
@@ -31,5 +35,27 @@ UI_STRINGS: dict[str, dict[str, str]] = {
         "footer_privacy": "Privacy Policy",
         "footer_terms": "Terms of Use",
         "logo_alt_prefix": "Logo",
+        "about_button": "About",
+    },
+}
+
+# Content for app/ui/templates/about.html, keyed by language. bio_html and
+# heading are placeholder copy — the user supplies the real text/name
+# afterward (see app/ui/README.md's "About page" section); only this dict
+# needs editing at that point, not the template or route.
+ABOUT_STRINGS: dict[str, dict[str, str]] = {
+    "he": {
+        "page_title": "אודות",
+        "heading": "[placeholder — שם יתעדכן]",
+        "photo_alt": "[placeholder — שם יתעדכן]",
+        "bio_html": "<p>[placeholder — תוכן אודות יתעדכן]</p>",
+        "back_link_text": "חזרה לאתר",
+    },
+    "en": {
+        "page_title": "About",
+        "heading": "[placeholder — name pending]",
+        "photo_alt": "[placeholder — name pending]",
+        "bio_html": "<p>[placeholder — bio content pending]</p>",
+        "back_link_text": "Back to site",
     },
 }

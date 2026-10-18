@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Mirrors app/knowledge/files/, app/knowledge/hotel_skills/, and
-# app/ui/hotel_assets/ to the server over SSH, bypassing GitHub (files in
-# there are gitignored real client data/images — see .gitignore). Run
-# after editing a knowledge file or adding/changing a hotel's branding
-# images. Text files (.md/.txt/.yaml/.yml) get their line endings fixed in
-# transit; everything else (e.g. PNG/JPG under hotel_assets/) is copied
+# Mirrors app/knowledge/files/, app/knowledge/hotel_skills/,
+# app/ui/hotel_assets/, and app/ui/private_assets/ to the server over SSH,
+# bypassing GitHub (files in there are gitignored real client data/images —
+# see .gitignore). Run after editing a knowledge file, adding/changing a
+# hotel's branding images, or adding a private site-wide asset (e.g. the
+# /about page's photo). Text files (.md/.txt/.yaml/.yml) get their line
+# endings fixed in transit; everything else (e.g. PNG/JPG) is copied
 # byte-for-byte unchanged, since that line-ending fix would corrupt a
 # binary file.
 #
@@ -59,7 +60,7 @@ if [[ -n "$EC2_SSH_KEY_PATH" ]]; then
   SSH_OPTS+=(-i "$EC2_SSH_KEY_PATH")
 fi
 
-SOURCE_DIRS=("app/knowledge/files" "app/knowledge/hotel_skills" "app/ui/hotel_assets")
+SOURCE_DIRS=("app/knowledge/files" "app/knowledge/hotel_skills" "app/ui/hotel_assets" "app/ui/private_assets")
 
 LOCAL_FILES=()
 REMOTE_FILES=()

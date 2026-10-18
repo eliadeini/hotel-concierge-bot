@@ -30,6 +30,11 @@ app/knowledge/hotel_skills/*
 # allowlist line needed.
 app/ui/hotel_assets/*/*
 
+# Site-wide private assets (e.g. the /about page's photo) — see
+# app/ui/README.md's "About page" section. Whole folder ignored,
+# including any README inside it — that's the entire reason it exists.
+app/ui/private_assets/
+
 # Local-only sync config (server host, etc.) — see deploy/sync-private-data.env.example
 deploy/sync-private-data.env
 
