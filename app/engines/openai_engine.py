@@ -1,9 +1,23 @@
 import json
+import re
 
 from openai import OpenAI
 
 from app.config import settings
 from app.engines.base import AIEngine, EngineError, EngineResponse, compose_system
+
+# OpenAI's web_search tool appends "utm_source=openai" to every citation URL
+# it returns — an OpenAI-added tracking param, not something the guest's
+# knowledge base or the model itself put there, so it's stripped before the
+# link ever reaches the guest. Matches "?utm_source=openai" or
+# "&utm_source=openai"; when another query param follows, the original
+# leading separator ("?" or "&") is kept for it so the query string stays
+# valid.
+_UTM_SOURCE_RE = re.compile(r"(?P<lead>[?&])utm_source=openai(?P<more>&)?")
+
+
+def _strip_openai_utm(text: str) -> str:
+    return _UTM_SOURCE_RE.sub(lambda m: m.group("lead") if m.group("more") else "", text)
 
 # Structured output schema — guarantees `text` and `found_in_kb` always come
 # back typed, regardless of prompt content. This is the Responses API shape
@@ -55,7 +69,10 @@ _SEARCH_NUDGE = (
     "You did not call web_search before answering, but you also found "
     "nothing relevant in the knowledge base. Per rule 3 of your "
     "instructions: actually call web_search now and try to find a real, "
-    "current answer before falling back to a general answer."
+    "current answer before falling back to a general answer. This message "
+    "is in English, but your reply must still be in the same language as "
+    "the guest's original question (per rule 1) — do not switch to English "
+    "just because this instruction is in English."
 )
 
 
@@ -89,7 +106,7 @@ class OpenAIAdapter(AIEngine):
             data, _ = self._parse(response)
 
         return EngineResponse(
-            text=str(data["text"]),
+            text=_strip_openai_utm(str(data["text"])),
             found_in_kb=bool(data["found_in_kb"]),
             raw_provider_response=response.model_dump(),
         )
