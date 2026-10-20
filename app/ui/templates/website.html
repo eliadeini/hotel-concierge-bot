@@ -141,6 +141,7 @@
   }
   .bubble-row.out .bubble { background: var(--bubble-out); border-color: var(--bubble-out); }
   .bubble-row.in .bubble { background: var(--bubble-in); }
+  .bubble a { color: var(--accent-dark); }
 
   .meta {
     font-size: 11px;
@@ -337,6 +338,34 @@
     return d.getHours().toString().padStart(2, "0") + ":" + d.getMinutes().toString().padStart(2, "0");
   }
 
+  // Matches markdown-style [label](https://url) links in bot replies so
+  // they can be rendered as real clickable <a> tags. Built via DOM APIs
+  // (createElement + textContent/href), never innerHTML — bot reply text
+  // is LLM output, not trusted markup, so this avoids any HTML/script
+  // injection risk while still allowing arbitrary link text/URLs.
+  const LINK_RE = /\[([^\[\]]+)\]\((https?:\/\/[^\s()]+)\)/g;
+
+  function appendRichText(container, text) {
+    let lastIndex = 0;
+    let match;
+    LINK_RE.lastIndex = 0;
+    while ((match = LINK_RE.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        container.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+      }
+      const a = document.createElement("a");
+      a.href = match[2];
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = match[1];
+      container.appendChild(a);
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) {
+      container.appendChild(document.createTextNode(text.slice(lastIndex)));
+    }
+  }
+
   function appendBubble(text, direction) {
     const row = document.createElement("div");
     row.className = "bubble-row " + direction;
@@ -344,7 +373,11 @@
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     bubble.dir = "auto";
-    bubble.textContent = text;
+    if (direction === "in") {
+      appendRichText(bubble, text);
+    } else {
+      bubble.textContent = text;
+    }
     row.appendChild(bubble);
 
     const time = document.createElement("div");
