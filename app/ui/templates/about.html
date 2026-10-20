@@ -31,12 +31,11 @@
     text-align: center;
   }
   .site-logo-small {
-    position: absolute;
-    top: 16px;
-    inset-inline-start: 16px;
     height: 100px;
     max-height: 100px;
     object-fit: contain;
+    display: block;
+    margin: 0 auto 16px;
   }
   .about-photo {
     width: 120px;
@@ -50,7 +49,14 @@
   h1 {
     color: var(--accent);
     font-size: 22px;
-    margin: 0 0 16px;
+    margin: 0 0 24px;
+  }
+  h2 {
+    color: var(--accent);
+    font-size: 18px;
+  }
+  .about-section + .about-section {
+    margin-top: 32px;
   }
   .bio {
     text-align: start;
@@ -65,12 +71,23 @@
 <body>
 
 <main>
-  <img src="/static/logo.png" alt="__SITE_LOGO_ALT__" class="site-logo-small">
-  <img src="__PHOTO_URL__" alt="__PHOTO_ALT__" class="about-photo">
-  <h1>__HEADING__</h1>
-  <div class="bio">
-__BIO_HTML__
-  </div>
+  <h1>__PAGE_TITLE__</h1>
+
+  <section class="about-section">
+    <img src="__PHOTO_URL__" alt="__PHOTO_ALT__" class="about-photo">
+    <h2>__PERSONAL_HEADING__</h2>
+    <div class="bio">
+__PERSONAL_HTML__
+    </div>
+  </section>
+
+  <section class="about-section">
+    <img src="/static/logo.png" alt="__SITE_LOGO_ALT__" class="site-logo-small">
+    <h2>__PROJECT_HEADING__</h2>
+    <div class="bio">
+__PROJECT_HTML__
+    </div>
+  </section>
 
   <a class="back-link" href="/chatbot/nahariya?lang=__LANG__">__BACK_LINK_TEXT__</a>
 </main>

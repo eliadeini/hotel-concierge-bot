@@ -68,10 +68,23 @@ NAHARIYA_STRINGS: dict[str, dict[str, str]] = {
 ABOUT_STRINGS: dict[str, dict[str, str]] = {
     "he": {
         "page_title": "אודות",
-        "heading": "אליעד עיני",
         "photo_alt": "אליעד עיני",
-        "bio_html": (
-            "<h2>אודות פרויקט חלון לצפון</h2>"
+        "personal_heading": "קצת עלי",
+        "personal_html": (
+            "<p>אני אליעד עיני, "
+            "מנהריה, מהנדס תוכנה "
+            "בכיר עם יותר מ-12 שנות "
+            "ניסיון בפיתוח תוכנה "
+            "בחברות שונות.</p>"
+            "<p>נשוי לנעם ואבא "
+            "ל-3 ילדים מתוקים.</p>"
+            "<p>מוזמנים לפנות אליי "
+            "בשאלות והצעות לגבי "
+            "הבוט לכתובת: "
+            '<a href="mailto:eeini1983@gmail.com">eeini1983@gmail.com</a></p>'
+        ),
+        "project_heading": "אודות פרויקט חלון לצפון",
+        "project_html": (
             "<p>חלון לצפון "
             "הוא פרויקט בוט "
             "שנבנה כדי לעזור "
@@ -113,26 +126,25 @@ ABOUT_STRINGS: dict[str, dict[str, str]] = {
             "יכול להתרחב לתחומים, "
             "מטרות וסוגי מידע "
             "נוספים רבים.</p>"
-            "<h2>קצת עלי</h2>"
-            "<p>אני אליעד עיני, "
-            "מנהריה, מהנדס תוכנה "
-            "בכיר עם יותר מ-12 שנות "
-            "ניסיון בפיתוח תוכנה "
-            "בחברות שונות.</p>"
-            "<p>נשוי לנעם ואבא "
-            "ל-3 ילדים מתוקים.</p>"
-            "<p>מוזמנים לפנות אליי "
-            "בשאלות והצעות לגבי "
-            "הבוט לכתובת: "
-            '<a href="mailto:eeini1983@gmail.com">eeini1983@gmail.com</a></p>'
         ),
         "back_link_text": "חזרה לאתר",
     },
     "en": {
         "page_title": "About",
-        "heading": "About Window to the North",
         "photo_alt": "Eliad Eini",
-        "bio_html": (
+        "personal_heading": "About Me",
+        "personal_html": (
+            "<p>I'm Eliad Eini, a senior software engineer from Nahariya, "
+            "with over 12 years of professional software development "
+            "experience.</p>"
+            "<p>I'm married to Noam, and we have three wonderful "
+            "children.</p>"
+            "<p>Feel free to contact me with any questions or suggestions "
+            "about the bot at "
+            '<a href="mailto:eeini1983@gmail.com">eeini1983@gmail.com</a>.</p>'
+        ),
+        "project_heading": "About Window to the North",
+        "project_html": (
             "<p>Window to the North is a bot project designed to help "
             "visitors, new residents, and locals explore northern Israel "
             "and make the most of their time in the region.</p>"
@@ -152,15 +164,6 @@ ABOUT_STRINGS: dict[str, dict[str, str]] = {
             "their guests, with plans to introduce WhatsApp integration in "
             "the future. The project could eventually be expanded to cover "
             "additional regions, use cases, and types of information.</p>"
-            "<h2>About Me</h2>"
-            "<p>I'm Eliad Eini, a senior software engineer from Nahariya, "
-            "with over 12 years of professional software development "
-            "experience.</p>"
-            "<p>I'm married to Noam, and we have three wonderful "
-            "children.</p>"
-            "<p>Feel free to contact me with any questions or suggestions "
-            "about the bot at "
-            '<a href="mailto:eeini1983@gmail.com">eeini1983@gmail.com</a>.</p>'
         ),
         "back_link_text": "Back to site",
     },
