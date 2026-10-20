@@ -40,18 +40,39 @@ def test_demo_page_links_to_about(client):
     assert '/about?lang=he' in response.text
 
 
+def test_demo_page_has_favicon_and_logo(client):
+    response = client.get("/demo")
+    assert '/static/favicon.png' in response.text
+    assert '/static/logo.png' in response.text
+
+
 def test_nahariya_chatbot_page_serves_html(client):
     response = client.get("/chatbot/nahariya")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "נהרייני" in response.text
+    assert "חלון לצפון" in response.text
+    assert 'lang="he"' in response.text
     # Not the hotel-lookalike look leaking through on the wrong route.
     assert "Hotel Demo" not in response.text
+
+
+def test_nahariya_chatbot_page_lang_en(client):
+    response = client.get("/chatbot/nahariya?lang=en")
+    assert response.status_code == 200
+    assert "Window to the North" in response.text
+    assert 'lang="en"' in response.text
+    assert "חלון לצפון" not in response.text
 
 
 def test_nahariya_chatbot_page_links_to_about(client):
     response = client.get("/chatbot/nahariya")
     assert '/about?lang=he' in response.text
+
+
+def test_nahariya_chatbot_page_has_favicon_and_logo(client):
+    response = client.get("/chatbot/nahariya")
+    assert '/static/favicon.png' in response.text
+    assert '/static/logo.png' in response.text
 
 
 def test_about_page_serves_html(client):
@@ -74,6 +95,12 @@ def test_about_page_unrecognized_lang_falls_back_to_english(client):
     response = client.get("/about?lang=fr")
     assert response.status_code == 200
     assert 'lang="en"' in response.text
+
+
+def test_about_page_has_favicon_and_logo(client):
+    response = client.get("/about")
+    assert '/static/favicon.png' in response.text
+    assert '/static/logo.png' in response.text
 
 
 def test_accessibility_page_serves_html(client):

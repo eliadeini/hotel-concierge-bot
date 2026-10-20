@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__PAGE_TITLE__</title>
+<link rel="icon" href="/static/favicon.png">
 <style>
   :root {
     --accent: #1F6F78;
@@ -28,6 +29,12 @@
     padding: 24px 16px 48px;
     line-height: 1.6;
     text-align: center;
+  }
+  .site-logo-small {
+    height: 32px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto 16px;
   }
   .about-photo {
     width: 120px;
@@ -56,6 +63,7 @@
 <body>
 
 <main>
+  <img src="/static/logo.png" alt="__SITE_LOGO_ALT__" class="site-logo-small">
   <img src="__PHOTO_URL__" alt="__PHOTO_ALT__" class="about-photo">
   <h1>__HEADING__</h1>
   <div class="bio">

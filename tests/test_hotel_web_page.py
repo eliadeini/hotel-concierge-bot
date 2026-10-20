@@ -84,6 +84,10 @@ def test_hotel_web_page_renders_with_row_values(client, db):
     assert "Example Hotel" in response.text
     assert "<title>Example Hotel - Concierge" in response.text
     assert "/chatbot/beachtown/demo/ask" in response.text
+    # Favicon is site-wide (shared template), but the site's own header
+    # logo must never leak onto a hotel page that didn't set its own.
+    assert "/static/favicon.png" in response.text
+    assert "/static/logo.png" not in response.text
 
 
 def test_hotel_web_page_defaults_to_english(client, db):

@@ -23,7 +23,7 @@ from app.messaging.inbound import gather_context
 from app.models.hotel_settings import HotelSettings
 from app.models.hotel_web_page import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, HotelWebPage, pick_language
 from app.models.user_note import UserNoteSentiment
-from app.ui.strings import ABOUT_STRINGS, UI_STRINGS
+from app.ui.strings import ABOUT_STRINGS, NAHARIYA_STRINGS, UI_STRINGS
 from app.user_notes import submit_user_note
 
 router = APIRouter()
@@ -174,28 +174,35 @@ def demo_page() -> str:
 
 
 @router.get("/chatbot/nahariya", response_class=HTMLResponse)
-def nahariya_chatbot_page() -> str:
-    """The general public website look for Nahariya. Path is
-    location-scoped (/chatbot/<location>) rather than a flat /website so
-    other locations can get their own page later (/chatbot/eilat, etc.)
-    without reshuffling this one's URL. Fixed/hardcoded values here (not
-    DB-sourced, so not html.escape()'d) — must keep rendering byte-for-byte
-    what this page looked like before /chatbot/{location}/{slug} existed,
-    aside from the new About button (see _render_website_page's
-    about_button_html docs)."""
-    about_label = UI_STRINGS["he"]["about_button"]
+def nahariya_chatbot_page(lang: str = "he") -> str:
+    """The general public website look for Nahariya ("Window to the
+    North" / "חלון לצפון"). Path is location-scoped (/chatbot/<location>)
+    rather than a flat /website so other locations can get their own page
+    later (/chatbot/eilat, etc.) without reshuffling this one's URL.
+    Fixed/hardcoded brand content here (NAHARIYA_STRINGS, app/ui/strings.py
+    — not DB-sourced, so not html.escape()'d).
+
+    ?lang=he/en works the same way as the generic hotel pages (see
+    hotel_web_page()), but this route's own default/fallback is "he", not
+    the site-wide DEFAULT_LANGUAGE ("en") — this page was Hebrew-only
+    before ?lang= support existed here, so a bare /chatbot/nahariya must
+    keep showing Hebrew, not silently flip to English for every existing
+    visitor/bookmark."""
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = "he"
+    content = NAHARIYA_STRINGS.get(lang, NAHARIYA_STRINGS["he"])
+    ui = UI_STRINGS.get(lang, UI_STRINGS["he"])
+    about_label = ui["about_button"]
+    logo_alt = f'{ui["logo_alt_prefix"]} {content["site_name"]}'
     return _render_website_page(
-        page_title="נהרייני - מדריך נהרייני מקומי",
-        site_name="נהרייני",
-        tagline=(
-            "מדריך נהרייני מקומי — שאלו אותי כל דבר על ביקור בנהריה: "
-            "חופים, מסעדות, טיולים ועוד"
-        ),
+        page_title=content["page_title"],
+        site_name=content["site_name"],
+        tagline=content["tagline"],
         bg_image_url="/static/Nahariya-bg.jpg",
-        logo_html="",
+        logo_html=f'<img src="/static/logo.png" alt="{logo_alt}" class="site-logo">',
         ask_url="/chatbot/nahariya/ask",
-        lang="he",
-        about_button_html=f'<a href="/about?lang=he" class="about-button">{about_label}</a>',
+        lang=lang,
+        about_button_html=f'<a href="/about?lang={lang}" class="about-button">{about_label}</a>',
     )
 
 
@@ -283,9 +290,12 @@ def _render_about_page(lang: str) -> str:
     (app/ui/strings.py); the photo is a literal constant, not DB-sourced,
     so nothing here needs html.escape()."""
     content = ABOUT_STRINGS.get(lang, ABOUT_STRINGS[DEFAULT_LANGUAGE])
+    ui = UI_STRINGS.get(lang, UI_STRINGS[DEFAULT_LANGUAGE])
+    site_name = NAHARIYA_STRINGS.get(lang, NAHARIYA_STRINGS[DEFAULT_LANGUAGE])["site_name"]
     return (
         _ABOUT_TEMPLATE.replace("__LANG__", lang)
         .replace("__PAGE_TITLE__", content["page_title"])
+        .replace("__SITE_LOGO_ALT__", f'{ui["logo_alt_prefix"]} {site_name}')
         .replace("__PHOTO_URL__", _ABOUT_PHOTO_URL)
         .replace("__PHOTO_ALT__", content["photo_alt"])
         .replace("__HEADING__", content["heading"])
