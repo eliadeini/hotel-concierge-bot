@@ -345,7 +345,11 @@
   // (createElement + textContent/href), never innerHTML — bot reply text
   // is LLM output, not trusted markup, so this avoids any HTML/script
   // injection risk while still allowing arbitrary link text/URLs.
-  const LINK_RE = /\[([^\[\]]+)\]\((https?:\/\/[^\s()]+)\)/g;
+  // Also matches the reversed (https://url)[label] order as a fallback —
+  // the model is instructed to always use [label](url), but that's a
+  // prompt, not a guarantee, so both orders are handled defensively.
+  const LINK_RE =
+    /\[([^\[\]]+)\]\((https?:\/\/[^\s()]+)\)|\((https?:\/\/[^\s()]+)\)\[([^\[\]]+)\]/g;
 
   function appendRichText(container, text) {
     let lastIndex = 0;
@@ -355,11 +359,13 @@
       if (match.index > lastIndex) {
         container.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
       }
+      const label = match[1] !== undefined ? match[1] : match[4];
+      const url = match[1] !== undefined ? match[2] : match[3];
       const a = document.createElement("a");
-      a.href = match[2];
+      a.href = url;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
-      a.textContent = match[1];
+      a.textContent = label;
       container.appendChild(a);
       lastIndex = match.index + match[0].length;
     }
