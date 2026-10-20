@@ -11,7 +11,7 @@ from app.engines.claude_engine import ClaudeAdapter
 from app.engines.openai_engine import OpenAIAdapter
 
 
-def make_openai_adapter(content: str | None):
+def make_openai_adapter(content: str | None, response_id: str = "resp_1"):
     adapter = OpenAIAdapter(api_key="sk-fake")
     if content is None:
         output = []  # no message item — simulates an empty/incomplete response
@@ -22,7 +22,9 @@ def make_openai_adapter(content: str | None):
                 content=[SimpleNamespace(type="output_text", text=content)],
             )
         ]
-    response = SimpleNamespace(output=output, model_dump=lambda: {"provider": "openai-raw"})
+    response = SimpleNamespace(
+        id=response_id, output=output, model_dump=lambda: {"provider": "openai-raw"}
+    )
     adapter._client = MagicMock()
     adapter._client.responses.create.return_value = response
     return adapter
@@ -82,6 +84,77 @@ def test_openai_includes_web_search_tool():
     adapter.ask("sys", "ctx", "q")
     _, kwargs = adapter._client.responses.create.call_args
     assert kwargs["tools"] == [{"type": "web_search"}]
+
+
+def test_openai_retries_with_search_nudge_when_not_found_and_not_searched():
+    adapter = OpenAIAdapter(api_key="sk-fake")
+    first = SimpleNamespace(
+        id="resp_1",
+        output=[
+            SimpleNamespace(
+                type="message",
+                content=[
+                    SimpleNamespace(
+                        type="output_text",
+                        text=json.dumps({"text": "no idea", "found_in_kb": False}),
+                    )
+                ],
+            )
+        ],
+        model_dump=lambda: {"provider": "openai-raw-1"},
+    )
+    second = SimpleNamespace(
+        id="resp_2",
+        output=[
+            SimpleNamespace(type="web_search_call"),
+            SimpleNamespace(
+                type="message",
+                content=[
+                    SimpleNamespace(
+                        type="output_text",
+                        text=json.dumps({"text": "found it", "found_in_kb": False}),
+                    )
+                ],
+            ),
+        ],
+        model_dump=lambda: {"provider": "openai-raw-2"},
+    )
+    adapter._client = MagicMock()
+    adapter._client.responses.create.side_effect = [first, second]
+
+    result = adapter.ask("sys", "ctx", "q")
+
+    assert result.text == "found it"
+    assert adapter._client.responses.create.call_count == 2
+    _, second_kwargs = adapter._client.responses.create.call_args
+    assert second_kwargs["previous_response_id"] == "resp_1"
+
+
+def test_openai_does_not_retry_when_search_already_attempted():
+    adapter = OpenAIAdapter(api_key="sk-fake")
+    response = SimpleNamespace(
+        id="resp_1",
+        output=[
+            SimpleNamespace(type="web_search_call"),
+            SimpleNamespace(
+                type="message",
+                content=[
+                    SimpleNamespace(
+                        type="output_text",
+                        text=json.dumps({"text": "searched already", "found_in_kb": False}),
+                    )
+                ],
+            ),
+        ],
+        model_dump=lambda: {"provider": "openai-raw"},
+    )
+    adapter._client = MagicMock()
+    adapter._client.responses.create.return_value = response
+
+    result = adapter.ask("sys", "ctx", "q")
+
+    assert result.text == "searched already"
+    assert adapter._client.responses.create.call_count == 1
 
 
 def test_claude_normalizes_tool_use():

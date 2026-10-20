@@ -31,10 +31,12 @@
     text-align: center;
   }
   .site-logo-small {
-    height: 32px;
+    position: absolute;
+    top: 16px;
+    inset-inline-start: 16px;
+    height: 100px;
+    max-height: 100px;
     object-fit: contain;
-    display: block;
-    margin: 0 auto 16px;
   }
   .about-photo {
     width: 120px;
@@ -70,7 +72,7 @@
 __BIO_HTML__
   </div>
 
-  <a class="back-link" href="/chatbot/nahariya">__BACK_LINK_TEXT__</a>
+  <a class="back-link" href="/chatbot/nahariya?lang=__LANG__">__BACK_LINK_TEXT__</a>
 </main>
 
 </body>
