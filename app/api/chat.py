@@ -150,6 +150,11 @@ _SLUG_RE = re.compile(r"^[a-z0-9-]+$")
 # /hotel-assets/<hotel_id>/<file>, see app/ui/hotel_assets/README.md.
 _FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+# http(s) only — this is rendered directly as an <a href> on the hotel's
+# generic page (see app/ui/routes.py::hotel_web_page()), so it must be an
+# absolute, fetchable URL, not a relative path or another scheme.
+_WEBSITE_URL_RE = re.compile(r"^https?://", re.IGNORECASE)
+
 
 class HotelWebPageData(BaseModel):
     location: str = Field(min_length=1, max_length=64)
@@ -164,6 +169,9 @@ class HotelWebPageData(BaseModel):
     page_title: dict[str, str]
     logo_file: str | None = None
     background_file: str | None = None
+    # The hotel's own real-world site — when set, the page's logo links
+    # there instead of being a plain image. See app/ui/routes.py.
+    website_url: str | None = None
     enabled: bool = True
 
     @field_validator("display_name", "tagline", "page_title")
@@ -174,6 +182,13 @@ class HotelWebPageData(BaseModel):
         unknown = set(value) - SUPPORTED_LANGUAGES
         if unknown:
             raise ValueError(f"unsupported language key(s): {sorted(unknown)}")
+        return value
+
+    @field_validator("website_url")
+    @classmethod
+    def _require_http_scheme(cls, value: str | None) -> str | None:
+        if value is not None and not _WEBSITE_URL_RE.match(value):
+            raise ValueError("website_url must start with http:// or https://")
         return value
 
 
@@ -233,6 +248,7 @@ def _upsert_web_page(db: Session, hotel: HotelSettings, data: HotelWebPageData) 
     row.page_title = json.dumps(data.page_title, ensure_ascii=False)
     row.logo_file = data.logo_file
     row.background_file = data.background_file
+    row.website_url = data.website_url
     row.enabled = data.enabled
 
     return {
@@ -245,6 +261,7 @@ def _upsert_web_page(db: Session, hotel: HotelSettings, data: HotelWebPageData) 
         "page_title": json.loads(row.page_title),
         "logo_file": row.logo_file,
         "background_file": row.background_file,
+        "website_url": row.website_url,
         "enabled": row.enabled,
         "url": f"/chatbot/{row.location}/{row.slug}",
     }

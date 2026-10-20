@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="__LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__PAGE_TITLE__</title>
+<link rel="icon" href="/static/favicon.png">
+<style>
+  :root {
+    --accent: #1F6F78;
+    --page-bg: #F5F5F3;
+    --border: #E2E2DE;
+    --text: #2a2a28;
+  }
+  * { box-sizing: border-box; }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  html, body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--page-bg);
+    color: var(--text);
+  }
+  main {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+    line-height: 1.6;
+    text-align: center;
+  }
+  .site-logo-small {
+    height: 32px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto 16px;
+  }
+  .about-photo {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    margin: 0 auto 16px;
+    border: 1px solid var(--border);
+  }
+  h1 {
+    color: var(--accent);
+    font-size: 22px;
+    margin: 0 0 16px;
+  }
+  .bio {
+    text-align: start;
+  }
+  .back-link {
+    display: inline-block;
+    margin-top: 32px;
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<main>
+  <img src="/static/logo.png" alt="__SITE_LOGO_ALT__" class="site-logo-small">
+  <img src="__PHOTO_URL__" alt="__PHOTO_ALT__" class="about-photo">
+  <h1>__HEADING__</h1>
+  <div class="bio">
+__BIO_HTML__
+  </div>
+
+  <a class="back-link" href="/chatbot/nahariya">__BACK_LINK_TEXT__</a>
+</main>
+
+</body>
+</html>

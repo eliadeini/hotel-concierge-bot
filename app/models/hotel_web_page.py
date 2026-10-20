@@ -7,10 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 # Only these two for now — adding a third language later means extending
-# this set, the admin validator in app/api/chat.py, and (for a genuinely
-# correct rendering, not just translated text) the template's RTL-authored
-# CSS, which currently assumes Hebrew/RTL regardless of which language is
-# actually shown. See app/ui/README.md.
+# this set and the admin validator in app/api/chat.py. See app/ui/README.md.
 SUPPORTED_LANGUAGES = {"he", "en"}
 DEFAULT_LANGUAGE = "en"
 
@@ -66,6 +63,11 @@ class HotelWebPage(Base):
     # /hotel-assets/<hotel_id>/<file> — see app/ui/hotel_assets/README.md.
     logo_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
     background_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # The hotel's own real-world website — when set, the generic page's
+    # logo links there (opens in a new tab) instead of being a plain,
+    # non-clickable image. See app/ui/routes.py::hotel_web_page().
+    website_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 

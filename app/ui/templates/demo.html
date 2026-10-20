@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hotel Demo · Concierge Demo</title>
+<link rel="icon" href="/static/favicon.png">
 <style>
   :root {
     --teal: #075E54;
@@ -62,6 +63,17 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     z-index: 1;
   }
+  header .about-button {
+    margin-inline-start: auto;
+    font-size: 12px;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.6);
+    border-radius: 999px;
+    padding: 4px 10px;
+    text-decoration: none;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
   .avatar {
     width: 40px;
     height: 40px;
@@ -73,6 +85,12 @@
     font-weight: 600;
     font-size: 13px;
     flex: 0 0 auto;
+    overflow: hidden;
+  }
+  .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .header-text { line-height: 1.3; font-size: inherit; font-weight: inherit; margin: 0; }
   .header-text .name { display: block; font-weight: 600; font-size: 16px; }
@@ -281,11 +299,12 @@
 <a href="#main" class="skip-link">דלג לתוכן הראשי</a>
 
 <header>
-  <div class="avatar" aria-hidden="true">HD</div>
+  <div class="avatar" aria-hidden="true"><img src="/static/logo.png" alt=""></div>
   <h1 class="header-text">
     <span class="name">Hotel Demo</span>
     <span class="status"><span class="online-dot" aria-hidden="true"></span>Online</span>
   </h1>
+  <a href="/about?lang=he" class="about-button">אודות</a>
 </header>
 
 <main id="main">

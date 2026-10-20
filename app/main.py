@@ -50,6 +50,13 @@ _HOTEL_ASSETS_DIR = Path(__file__).parent / "ui" / "hotel_assets"
 _HOTEL_ASSETS_DIR.mkdir(exist_ok=True)
 app.mount("/hotel-assets", StaticFiles(directory=_HOTEL_ASSETS_DIR), name="hotel-assets")
 
+# Site-wide private assets (currently just the /about page's photo) — a
+# single flat folder, entirely gitignored, synced via
+# deploy/sync-private-data.sh. See app/ui/README.md's "About page" section.
+_PRIVATE_ASSETS_DIR = Path(__file__).parent / "ui" / "private_assets"
+_PRIVATE_ASSETS_DIR.mkdir(exist_ok=True)
+app.mount("/private-assets", StaticFiles(directory=_PRIVATE_ASSETS_DIR), name="private-assets")
+
 
 @app.get("/health")
 def health() -> dict:
