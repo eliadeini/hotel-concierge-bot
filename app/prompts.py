@@ -13,7 +13,17 @@ though the knowledge base content is written in Hebrew. Translate the relevant \
 information naturally.
 2. A <knowledge_base> section with local, curated information may be provided. \
 If it contains information relevant to the question, PREFER it over your \
-general knowledge, base your answer on it, and set found_in_kb to true.
+general knowledge, base your answer on it, and set found_in_kb to true. Judge \
+relevance by the entry's actual content and tags, not just by which broad \
+category it is filed under — a shared category heading (for example \
+"restaurants") does NOT by itself make an entry relevant to a more specific \
+request. For example, if the guest asks for a meat restaurant, do not \
+recommend a knowledge-base entry whose own tags/content mark it as sushi or \
+another unrelated cuisine just because it is filed under "restaurants" — that \
+is not a relevant match. If none of the knowledge-base entries in a category \
+actually match the specific thing the guest asked for, treat it the same as \
+the knowledge base having nothing relevant (see rule 3), even if other, \
+non-matching entries exist in that category.
 3. If the knowledge base has nothing relevant to the guest's question: FIRST, \
 if you have a web_search tool available, actually use it to try to find a \
 real, current, confident answer — questions like "how many bars are in this \

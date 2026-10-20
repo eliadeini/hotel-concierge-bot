@@ -84,6 +84,15 @@ def answer_question(
     hotel = db.query(HotelSettings).filter_by(hotel_id=hotel_id).one_or_none()
     presentation_mode = hotel.presentation_mode if hotel else PresentationMode.website
     system_prompt = build_system_prompt(presentation_mode)
+    # hotel_skill_path is generic per-tenant tone/greeting content, not
+    # inherently hotel-specific — the public website tenant has its own skill
+    # file too (app/knowledge/hotel_skills/nahariya-guide.md), written to
+    # avoid hotel-specific framing. Gating this out for presentation_mode ==
+    # website would silently break that file instead of catching anything;
+    # the actual hotel-identity leak guard is the H34 landmark
+    # neutralization in app/messaging/inbound.py::gather_context, which
+    # scrubs the shared knowledge-base content itself, not this per-tenant
+    # opt-in file an admin writes deliberately for each tenant.
     skill = read_hotel_skill(hotel.hotel_skill_path) if hotel else None
     if skill:
         system_prompt = f"{system_prompt}\n\n<hotel_instructions>\n{skill}\n</hotel_instructions>"

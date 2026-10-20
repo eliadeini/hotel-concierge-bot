@@ -299,8 +299,10 @@ def _render_about_page(lang: str) -> str:
         .replace("__SITE_LOGO_ALT__", f'{ui["logo_alt_prefix"]} {site_name}')
         .replace("__PHOTO_URL__", _ABOUT_PHOTO_URL)
         .replace("__PHOTO_ALT__", content["photo_alt"])
-        .replace("__HEADING__", content["heading"])
-        .replace("__BIO_HTML__", content["bio_html"])
+        .replace("__PERSONAL_HEADING__", content["personal_heading"])
+        .replace("__PERSONAL_HTML__", content["personal_html"])
+        .replace("__PROJECT_HEADING__", content["project_heading"])
+        .replace("__PROJECT_HTML__", content["project_html"])
         .replace("__BACK_LINK_TEXT__", content["back_link_text"])
     )
 
