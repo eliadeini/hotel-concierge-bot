@@ -294,6 +294,7 @@ def _render_about_page(lang: str) -> str:
     site_name = NAHARIYA_STRINGS.get(lang, NAHARIYA_STRINGS[DEFAULT_LANGUAGE])["site_name"]
     return (
         _ABOUT_TEMPLATE.replace("__LANG__", lang)
+        .replace("__DIR__", "rtl" if lang == "he" else "ltr")
         .replace("__PAGE_TITLE__", content["page_title"])
         .replace("__SITE_LOGO_ALT__", f'{ui["logo_alt_prefix"]} {site_name}')
         .replace("__PHOTO_URL__", _ABOUT_PHOTO_URL)
