@@ -43,6 +43,21 @@ _TEXT_FORMAT = {
 # Completions: Chat Completions has no equivalent model-decides-when option.
 _TOOLS = [{"type": "web_search"}]
 
+# In practice "auto" tool choice is not reliable enough on its own: the model
+# sometimes answers found_in_kb=false (nothing in the knowledge base) without
+# ever calling web_search, and falls back to a vague "check reviews yourself"
+# non-answer — exactly what rule 3 of the system prompt forbids. When that
+# happens we give it one explicit nudge to actually search before accepting
+# the answer, instead of forcing tool_choice on every call (which some
+# models reject for built-in tools, and which would add cost/latency even to
+# plain knowledge-base hits).
+_SEARCH_NUDGE = (
+    "You did not call web_search before answering, but you also found "
+    "nothing relevant in the knowledge base. Per rule 3 of your "
+    "instructions: actually call web_search now and try to find a real, "
+    "current answer before falling back to a general answer."
+)
+
 
 class OpenAIAdapter(AIEngine):
     provider_name = "openai"
@@ -61,7 +76,26 @@ class OpenAIAdapter(AIEngine):
             tools=_TOOLS,
             text=_TEXT_FORMAT,
         )
+        data, searched = self._parse(response)
 
+        if not data["found_in_kb"] and not searched:
+            response = self._client.responses.create(
+                model=self._model,
+                previous_response_id=response.id,
+                input=[{"role": "user", "content": _SEARCH_NUDGE}],
+                tools=_TOOLS,
+                text=_TEXT_FORMAT,
+            )
+            data, _ = self._parse(response)
+
+        return EngineResponse(
+            text=str(data["text"]),
+            found_in_kb=bool(data["found_in_kb"]),
+            raw_provider_response=response.model_dump(),
+        )
+
+    @staticmethod
+    def _parse(response) -> tuple[dict, bool]:
         # response.output is a list that may include web_search_call items
         # (when the model searched) alongside the final message — find the
         # message explicitly rather than assuming a fixed position/index.
@@ -78,8 +112,5 @@ class OpenAIAdapter(AIEngine):
         except json.JSONDecodeError as exc:
             raise EngineError("OpenAI response was not valid JSON") from exc
 
-        return EngineResponse(
-            text=str(data["text"]),
-            found_in_kb=bool(data["found_in_kb"]),
-            raw_provider_response=response.model_dump(),
-        )
+        searched = any(item.type == "web_search_call" for item in response.output)
+        return data, searched
