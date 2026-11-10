@@ -1,6 +1,7 @@
 import json
 import re
 
+import ftfy
 from openai import OpenAI
 
 from app.config import settings
@@ -19,6 +20,17 @@ _UTM_SOURCE_RE = re.compile(r"(?P<lead>[?&])utm_source=openai(?P<more>&)?")
 def _strip_openai_utm(text: str) -> str:
     return _UTM_SOURCE_RE.sub(lambda m: m.group("lead") if m.group("more") else "", text)
 
+
+def _clean_reply_text(text: str) -> str:
+    """Repairs mojibake and strips the OpenAI tracking param before a reply
+    reaches a guest. web_search sometimes scrapes a page whose HTTP response
+    doesn't declare its charset cleanly, so OpenAI falls back to decoding it
+    as Windows-1252 instead of UTF-8 — the model then echoes that garbled
+    text (Hebrew business names/addresses) verbatim into its answer. This is
+    an OpenAI-side bug we can't fix at the source, so ftfy.fix_text() repairs
+    the common case (it's a no-op on text that isn't already mojibake)."""
+    return _strip_openai_utm(ftfy.fix_text(text))
+
 # Structured output schema — guarantees `text` and `found_in_kb` always come
 # back typed, regardless of prompt content. This is the Responses API shape
 # (nested under the `text` request param), not the older Chat Completions
@@ -33,7 +45,14 @@ _TEXT_FORMAT = {
             "properties": {
                 "text": {
                     "type": "string",
-                    "description": "The reply to the guest, in the guest's language.",
+                    "description": (
+                        "The reply to the user, in the user's language. If you "
+                        "reference a source/link, write it inline using exactly "
+                        "this Markdown syntax, in this order: [label](https://url) "
+                        "— label in square brackets first, then the URL in "
+                        "parentheses immediately after. Never reverse that order "
+                        "and never wrap a link in any other punctuation."
+                    ),
                 },
                 "found_in_kb": {
                     "type": "boolean",
@@ -71,7 +90,7 @@ _SEARCH_NUDGE = (
     "instructions: actually call web_search now and try to find a real, "
     "current answer before falling back to a general answer. This message "
     "is in English, but your reply must still be in the same language as "
-    "the guest's original question (per rule 1) — do not switch to English "
+    "the user's original question (per rule 1) — do not switch to English "
     "just because this instruction is in English."
 )
 
@@ -106,7 +125,7 @@ class OpenAIAdapter(AIEngine):
             data, _ = self._parse(response)
 
         return EngineResponse(
-            text=_strip_openai_utm(str(data["text"])),
+            text=_clean_reply_text(str(data["text"])),
             found_in_kb=bool(data["found_in_kb"]),
             raw_provider_response=response.model_dump(),
         )

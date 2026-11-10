@@ -6,6 +6,7 @@ pydantic-settings>=2.3
 cryptography>=42
 openai>=1.40
 anthropic>=0.40
+ftfy>=6.2
 PyYAML>=6.0
 pytest>=8.0
 httpx>=0.27

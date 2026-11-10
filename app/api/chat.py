@@ -63,6 +63,116 @@ class ChatResponse(BaseModel):
     conversation_id: int
 
 
+# --- Closed-business safety net (backs up system-prompt rule 9) -----------
+#
+# Matches one MarkdownFileSource._format_entry()-rendered entry's heading +
+# details line: "### {name}\n{category: closed | region: ... | ...}".
+_CLOSED_ENTRY_RE = re.compile(
+    r"^### (?P<name>.+?)\n[^\n]*\bcategory:\s*closed\b", re.MULTILINE | re.IGNORECASE
+)
+
+
+def _name_variants(name: str) -> list[str]:
+    """"Sogo (Kosher Bistro Bar)" pairs a proper name with a parenthetical
+    description — a reply is far more likely to say just "Sogo" than repeat
+    the whole parenthetical, so both the full name and the part before any
+    " (" are checked."""
+    base, sep, _ = name.partition(" (")
+    return [name] if not sep else [name, base]
+
+
+def _closed_business_patterns(context: str) -> list[tuple[str, re.Pattern]]:
+    """(display_name, compiled whole-word pattern) pairs for every
+    category:closed entry present in `context` — exactly the knowledge-base
+    text the model was shown, so this stays correct without duplicating
+    gather_context()'s region-merge/landmark-scrub logic."""
+    found: list[tuple[str, str]] = []
+    for match in _CLOSED_ENTRY_RE.finditer(context):
+        name = match.group("name").strip()
+        for variant in _name_variants(name):
+            found.append((name, variant))
+    found.sort(key=lambda item: len(item[1]), reverse=True)
+    return [
+        (name, re.compile(r"\b" + re.escape(variant) + r"\b", re.IGNORECASE))
+        for name, variant in found
+    ]
+
+
+def _find_closed_mention(text: str, patterns: list[tuple[str, re.Pattern]]) -> str | None:
+    for name, pattern in patterns:
+        if pattern.search(text):
+            return name
+    return None
+
+
+_WHITESPACE_RUN_RE = re.compile(r"[ \t]{2,}")
+
+
+def _redact_closed_mentions(text: str, patterns: list[tuple[str, re.Pattern]]) -> str:
+    """Absolute last resort — an em dash reads as an intentional elision in
+    most languages without needing guest-language detection."""
+    for _, pattern in patterns:
+        text = pattern.sub("—", text)
+    return _WHITESPACE_RUN_RE.sub(" ", text)
+
+
+_CLOSED_BUSINESS_CORRECTION = (
+    "\n\n<deterministic_correction>\n"
+    'Your draft reply violated rule 9: it named "{name}", which the knowledge '
+    'base explicitly marks as closed. Write your complete reply again from '
+    'scratch without mentioning "{name}" anywhere — if another place '
+    "genuinely fits what the guest asked, recommend that instead; otherwise "
+    "simply leave it out and answer per rule 3 as normal. Do not refer to "
+    "this correction, or to a previous answer having been changed, anywhere "
+    "in your reply. This instruction is in English, but your reply itself "
+    "must still be in the same language as the guest's original question "
+    "(per rule 1).\n"
+    "</deterministic_correction>"
+)
+
+
+def _guard_against_closed_business(
+    engine,
+    system_prompt: str,
+    context: str,
+    question: str,
+    result: EngineResponse,
+    hotel_id: str,
+) -> EngineResponse:
+    """Deterministic safety net behind system-prompt rule 9: the prompt asks
+    the model to never recommend a business the knowledge base marks
+    `category: closed`, but it doesn't always comply (confirmed: a guest
+    asking for a meat restaurant in Nahariya was once pointed to "Crazy
+    Bar", which closed.md explicitly forbids). Re-checks the model's draft
+    against every closed-business name actually present in `context` and,
+    if one leaked through, retries once with an explicit correction before
+    falling back to redaction."""
+    patterns = _closed_business_patterns(context)
+    if not patterns:
+        return result
+
+    leaked = _find_closed_mention(result.text, patterns)
+    if leaked is None:
+        return result
+
+    logger.warning(
+        "Closed business %r leaked into hotel_id=%s engine=%s reply; retrying once",
+        leaked, hotel_id, engine.provider_name,
+    )
+    corrected_prompt = system_prompt + _CLOSED_BUSINESS_CORRECTION.format(name=leaked)
+    result = engine.ask(system_prompt=corrected_prompt, context=context, question=question)
+
+    leaked_again = _find_closed_mention(result.text, patterns)
+    if leaked_again is None:
+        return result
+
+    logger.error(
+        "Closed business %r still present in hotel_id=%s engine=%s reply after retry; redacting text",
+        leaked_again, hotel_id, engine.provider_name,
+    )
+    return result.model_copy(update={"text": _redact_closed_mentions(result.text, patterns)})
+
+
 def answer_question(
     hotel_id: str,
     region: str,
@@ -113,6 +223,9 @@ def answer_question(
         system_prompt=system_prompt,
         context=context,
         question=question,
+    )
+    result = _guard_against_closed_business(
+        engine, system_prompt, context, question, result, hotel_id
     )
 
     # Anonymous log: question, answer, found_in_kb — no guest identifiers.
