@@ -44,6 +44,15 @@ interface, not a refactor of the endpoint.
   restaurant) with no local signal to override them. Add a `closed.md` (or
   an entry in any existing file, category is what matters, not filename)
   per region as outdated businesses are identified.
+  - The prompt rule alone isn't airtight — a model can still ignore it.
+    `app/api/chat.py`'s `_guard_against_closed_business()` is a deterministic
+    backstop: it re-checks every reply against the `category: closed` names
+    actually present in `context`, retries once with an explicit correction
+    if one leaked through, and redacts it as a last resort if it survives
+    the retry too. It only catches names in the same script the `name:`
+    field uses (e.g. a Latin-script `name:` won't catch a Hebrew
+    transliteration of it) — `name:` entries are worth keeping in the
+    script a guest reply is most likely to repeat.
 
 ## Notes
 - Region values are restricted to a whitelist (`markdown_source.py`'s
